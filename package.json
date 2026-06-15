@@ -1,0 +1,36 @@
+{
+  "name": "site-clone-to-v3",
+  "version": "0.0.0-alpha.0",
+  "description": "Clone any live website to Elementor V3 — pixel-accurate, on any WordPress with the Novamira plugin.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "clone-v3": "./dist/bin/clone-v3.js"
+  },
+  "scripts": {
+    "test": "echo 'No tests yet — Phase 0 in progress' && exit 0",
+    "build": "tsc",
+    "lint": "eslint src --ext .ts",
+    "dev": "tsx src/cli/clone-v3.ts"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "elementor",
+    "elementor-v3",
+    "wordpress",
+    "novamira",
+    "site-clone",
+    "framer",
+    "reverse-engineering"
+  ],
+  "author": "Adilinu94",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Adilinu94/site-clone-to-v3.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Adilinu94/site-clone-to-v3/issues"
+  }
+}
