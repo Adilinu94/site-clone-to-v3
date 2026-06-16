@@ -1,8 +1,8 @@
 # SITE-CLONE-TO-V3 — Handoff für nächste Session
 
-> **Stand:** 2026-06-16, 19:30 — Phasen 0-9A abgeschlossen
-> **Letzter verifizierter Commit auf `main`:** `4b556e6` (Phase 9A)
-> **Tests:** 400/400 grün, TS-clean (0 errors)
+> **Stand:** 2026-06-16, 19:35 — Phasen 0-9B abgeschlossen
+> **Letzter verifizierter Commit auf `main`:** `6996941` (Phase 9B)
+> **Tests:** 454/454 grün, TS-clean (0 errors)
 
 ## TL;DR
 
@@ -186,11 +186,62 @@ Default-Fixer sind **placeholders** (return `ok: false`). Sie dokumentieren nur,
 
 ## Nächste sinnvolle Schritte (Reihenfolge)
 
-1. **Phase 9B — Dry-Run + Diff-Only + Incremental-Build** (Build-Modi, 1.5 Tage)
-2. **Asset-Stage-Pipeline-Integration** (Lücke aus 375d2a5 fixen, 0.5 Tage)
-3. **Phase 10 — Tests** (E2E gegen echte WP-Targets, 2.5 Tage)
-4. **Phase 11 — Docs + npm-Publish** (2 Tage)
-5. **Real-Fixer implementieren** (Phase 8 hat nur Placeholder-Fixer; die echten MCP-Calls für color/font/layout/image-fix müssen in Phase 9+ kommen)
+1. **Phase 10 — Tests** (E2E gegen echte WP-Targets, 2.5 Tage)
+2. **Phase 11 — Docs + npm-Publish** (2 Tage)
+3. **Real-Fixer implementieren** (Phase 8 hat nur Placeholder-Fixer; die echten MCP-Calls für color/font/layout/image-fix müssen in einer späteren Phase kommen)
+4. **Pipeline-Runner in `clone` integrieren** — `pipeline-runner.ts` existiert und ist state-aware, wird aber noch nicht vom `clone`-Command aufgerufen (nur dry-run/diff/incremental).
+
+## Phase-9B-Details (NEU — Build-Modi)
+
+### Was Phase 9B liefert
+
+Drei neue Build-Modi aus BAUPLAN §4:
+
+- **`--dry-run`** — Generiert V3+V4+Animation-Specs aus `extraction-result.json` **ohne MCP-Calls**. Output: `dryrun-page-v3.json`, `dryrun-page-v4.json`, `dryrun-build-summary.json`, `dryrun-animations/`.
+- **`--diff-only`** — Vergleicht aktuelle Section-Hashes gegen `previous-sections.json`. Output: Added/Modified/Removed/Unchanged-Listen.
+- **`--incremental`** — Bestimmt Rebuild-Plan (welche Sections ändern sich vs `previous-sections.json`). Schreibt `incremental-build.json`. Skip wenn nichts geändert.
+
+Alle drei sind **mutually exclusive** (geprüft im CLI).
+
+### Neue Libs (in `src/cli/`)
+
+| Datei | LoC | Zweck |
+|---|---|---|
+| `dry-run.ts` | 147 | Dry-Run Orchestrator + Format |
+| `diff-only.ts` | 162 | Section-Snapshot + Hash + Diff |
+| `incremental.ts` | 122 | Rebuild-Plan + State-Loader |
+| `pipeline-runner.ts` | 322 | State-aware runPipeline-Wrapper mit Resume + Progress + Review |
+| `tests/unit/cli-fixtures.ts` | 41 | Shared makeSection + makeExtractionResult |
+
+### CLI-Beispiele (live verifiziert)
+
+```bash
+# Dry-Run: zeigt Build-Plan ohne WP zu berühren
+npx tsx src/cli/clone-v3.ts clone --no-wizard --url https://example.com --output research --dry-run
+
+# Diff-Only: vergleicht vs vorheriger Build
+npx tsx src/cli/clone-v3.ts diff --url https://example.com --output research
+
+# Diff + neue Baseline speichern
+npx tsx src/cli/clone-v3.ts diff --url https://example.com --output research --save-snapshots
+
+# Incremental: nur geänderte Sections neu bauen
+npx tsx src/cli/clone-v3.ts clone --no-wizard --url https://example.com --output research --incremental
+```
+
+### Honesty-Discipline (PFLICHT — aufgedeckt + gefixt)
+
+- **2 unbenutzte Type-Imports** in `dry-run.ts` (`AssetManifest`, `SyncResult`) wurden vom TSC geflaggt und entfernt.
+- **`pipeline-runner.ts`** war seit Sprint uncommitted (in früherer Session gebaut). Verifiziert: nutzt `runPipeline` + `state-manager` + `chalk`. Korrekt verdrahtet, typecheck-clean, läuft mit echter Pipeline.
+
+### Tests (Phase 9B: 54 neue Tests)
+
+| Datei | Tests | Coverage |
+|---|---|---|
+| `tests/unit/dry-run.test.ts` | 9 | artifact generation, empty extraction, no-tokens warning, sync-op counting, formatDryRunReport |
+| `tests/unit/diff-only.test.ts` | 14 | hash generation, snapshot round-trip, computeDiff (added/removed/modified/unchanged), formatDiffReport |
+| `tests/unit/incremental.test.ts` | 13 | diffForIncremental logic, loadIncrementalState, runIncremental (skip/rebuild), formatIncrementalReport |
+| `tests/unit/collect-assets.test.ts` | 18 | collectAssets() mock-based mit image/SVG/favicon-Szenarien |
 
 ## Phase-9A-Details (NEU — Wizard-Integration Teil 1)
 
