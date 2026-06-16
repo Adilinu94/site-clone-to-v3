@@ -112,14 +112,14 @@ async function collectAssets(page: Page): Promise<{
     // ── Images: <img src>, <picture><source srcset> ──
     const images: DiscoveredImage[] = [];
     const seenImageUrls = new Set<string>();
-    for (const img of document.querySelectorAll('img[src]')) {
+    for (const img of Array.from(document.querySelectorAll('img[src]'))) {
       const src = (img as HTMLImageElement).src;
       if (!src || src.startsWith('data:') || src.startsWith('blob:') || seenImageUrls.has(src)) continue;
       seenImageUrls.add(src);
       images.push({ url: src, alt: (img as HTMLImageElement).alt || undefined });
     }
     // <picture> elements: grab first <source> with a valid srcset
-    for (const pic of document.querySelectorAll('picture')) {
+    for (const pic of Array.from(document.querySelectorAll('picture'))) {
       const source = pic.querySelector('source[srcset]');
       if (!source) continue;
       const srcset = source.getAttribute('srcset') ?? '';
@@ -134,7 +134,7 @@ async function collectAssets(page: Page): Promise<{
     const svgs: DiscoveredSvg[] = [];
     const seenSvgHashes = new Set<string>();
     // Inline SVGs
-    for (const svgEl of document.querySelectorAll('svg')) {
+    for (const svgEl of Array.from(document.querySelectorAll('svg'))) {
       // Skip very small SVGs (likely icons in icon-fonts, not content)
       const markup = svgEl.outerHTML;
       if (markup.length < 80) continue;
@@ -150,7 +150,7 @@ async function collectAssets(page: Page): Promise<{
       });
     }
     // External SVGs referenced via <img>
-    for (const img of document.querySelectorAll('img[src$=".svg" i]')) {
+    for (const img of Array.from(document.querySelectorAll('img[src]')).filter(img => /\.svg(\?|$)/i.test((img as HTMLImageElement).src))) {
       const src = (img as HTMLImageElement).src;
       if (!src || src.startsWith('data:')) continue;
       svgs.push({ kind: 'external', url: src });
@@ -165,7 +165,7 @@ async function collectAssets(page: Page): Promise<{
       favicons.push({ url, kind, ...(sizes ? { sizes } : {}), ...(type ? { type } : {}) });
     };
 
-    for (const link of document.querySelectorAll('link[rel*="icon"]')) {
+    for (const link of Array.from(document.querySelectorAll('link[rel*="icon"]'))) {
       const rel = (link.getAttribute('rel') ?? '').toLowerCase();
       const href = (link as HTMLLinkElement).href;
       const sizes = link.getAttribute('sizes') ?? undefined;
@@ -179,7 +179,7 @@ async function collectAssets(page: Page): Promise<{
     }
 
     // OG / Twitter meta images
-    for (const meta of document.querySelectorAll('meta[property], meta[name]')) {
+    for (const meta of Array.from(document.querySelectorAll('meta[property], meta[name]'))) {
       const prop = meta.getAttribute('property') || meta.getAttribute('name') || '';
       const content = meta.getAttribute('content');
       if (!content) continue;

@@ -9,9 +9,9 @@
  *   Stage 5 (build): V3 + V4 page-data writers
  *   Stage 6 (animations, Phase 7): WPCode-Snippet-Plan aus Animations
  *
- * The asset-downloader (fonts) is now integrated as Stage 3.
- * Images, SVGs, and favicons require DOM extraction enhancement
- * (ExtractionResult.dom cheerio-parsing) — see BAUPLAN §Phase 4.
+ * The asset-downloader is now integrated as Stage 3.
+ * Images, SVGs, and favicons are collected by the extractor
+ * via collectAssets() from the live DOM.
  */
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
@@ -36,11 +36,18 @@ import {
 } from '../builder/animation-injector.js';
 import {
   downloadFonts,
-  type DownloadFontsResult,
 } from '../scraper/font-downloader.js';
 import {
+  downloadImages,
+} from '../scraper/image-downloader.js';
+import {
+  downloadSvgs,
+} from '../scraper/svg-downloader.js';
+import {
+  downloadFavicons,
+} from '../scraper/favicon-og-downloader.js';
+import {
   buildAndWriteManifest,
-  summarizeManifest,
   type AssetManifest,
 } from '../scraper/manifest-builder.js';
 
@@ -157,56 +164,110 @@ export async function runPipeline(
     });
   }
 
-  // Stage 3: assets (fonts from extraction.fontsIntercepted)
-  if (!skip.has(3) && extraction?.fontsIntercepted?.length) {
-    const assetsRoot = path.join(outputDir, 'assets');
-    await fs.mkdir(assetsRoot, { recursive: true });
+  // Stage 3: assets (images, fonts, SVGs, favicons from extraction)
+  if (!skip.has(3) && extraction) {
+    const hasAnyAssets =
+      (extraction.images?.length ?? 0) > 0 ||
+      (extraction.fontsIntercepted?.length ?? 0) > 0 ||
+      (extraction.svgs?.length ?? 0) > 0 ||
+      (extraction.favicons?.length ?? 0) > 0;
 
-    const { result, ms } = await time(async () => {
-      const fontsResult: DownloadFontsResult = await downloadFonts(
-        extraction!.fontsIntercepted,
-        {
-          hostname: extraction!.hostname,
-          outputRoot: assetsRoot,
+    if (!hasAnyAssets) {
+      stages.push({
+        name: 'assets',
+        status: 'skipped',
+        durationMs: 0,
+        outputPaths: [],
+        summary: { reason: 'no assets discovered in extraction' },
+      });
+    } else {
+      const assetsRoot = path.join(outputDir, 'assets');
+      await fs.mkdir(assetsRoot, { recursive: true });
+
+      const { result, ms } = await time(async () => {
+        // Download all four asset categories in parallel
+        const [imagesResult, fontsResult, svgsResult, faviconsResult] = await Promise.all([
+          extraction!.images?.length
+            ? downloadImages(
+                extraction!.images.map((img) => ({ url: img.url, alt: img.alt })),
+                { hostname: extraction!.hostname, outputRoot: assetsRoot, subdir: 'images' },
+              )
+            : Promise.resolve({ manifest: {} as Record<string, import('../scraper/image-downloader.js').ImageManifestEntry>, errors: [] }),
+
+          extraction!.fontsIntercepted?.length
+            ? downloadFonts(extraction!.fontsIntercepted, {
+                hostname: extraction!.hostname,
+                outputRoot: assetsRoot,
+              })
+            : Promise.resolve({ manifest: {} as Record<string, import('../scraper/font-downloader.js').FontManifestEntry>, errors: [] }),
+
+          extraction!.svgs?.length
+            ? downloadSvgs(
+                extraction!.svgs.map((s) =>
+                  s.kind === 'inline'
+                    ? { kind: 'inline' as const, markup: s.markup!, sourceElement: s.sourceElement, existingId: s.existingId }
+                    : { kind: 'external' as const, url: s.url! },
+                ),
+                { hostname: extraction!.hostname, outputRoot: assetsRoot },
+              )
+            : Promise.resolve({ manifest: {}, errors: [] }),
+
+          extraction!.favicons?.length
+            ? downloadFavicons(
+                extraction!.favicons.map((f) => ({
+                  url: f.url,
+                  kind: f.kind,
+                  sizes: f.sizes,
+                  type: f.type,
+                })),
+                { hostname: extraction!.hostname, outputRoot: assetsRoot },
+              )
+            : Promise.resolve({ manifest: {}, errors: [] }),
+        ]);
+
+        const { manifest } = await buildAndWriteManifest(
+          {
+            hostname: extraction!.hostname,
+            url,
+            images: imagesResult,
+            fonts: fontsResult,
+            svgs: svgsResult,
+            favicons: faviconsResult,
+          },
+          assetsRoot,
+        );
+        return { imagesResult, fontsResult, svgsResult, faviconsResult, manifest };
+      });
+
+      assetManifest = result.manifest;
+      const manifestPath = path.join(assetsRoot, 'manifest.json');
+      artifacts['asset-manifest'] = manifestPath;
+
+      stages.push({
+        name: 'assets',
+        status: 'ok',
+        durationMs: ms,
+        outputPaths: [manifestPath],
+        summary: {
+          images: Object.keys(result.imagesResult.manifest).length,
+          imageErrors: result.imagesResult.errors.length,
+          fonts: Object.keys(result.fontsResult.manifest).length,
+          fontErrors: result.fontsResult.errors.length,
+          svgs: Object.keys(result.svgsResult.manifest).length,
+          svgErrors: result.svgsResult.errors.length,
+          favicons: Object.keys(result.faviconsResult.manifest).length,
+          faviconErrors: result.faviconsResult.errors.length,
+          manifest: path.join(assetsRoot, 'manifest.json'),
         },
-      );
-      const { manifest } = await buildAndWriteManifest(
-        {
-          hostname: extraction!.hostname,
-          url,
-          fonts: fontsResult,
-        },
-        assetsRoot,
-      );
-      const summary = summarizeManifest(manifest);
-      return { fontsResult, manifest, summary };
-    });
-
-    assetManifest = result.manifest;
-    const manifestPath = path.join(assetsRoot, 'manifest.json');
-    artifacts['asset-manifest'] = manifestPath;
-
-    stages.push({
-      name: 'assets',
-      status: 'ok',
-      durationMs: ms,
-      outputPaths: [manifestPath],
-      summary: {
-        fonts: Object.keys(result.fontsResult.manifest).length,
-        fontErrors: result.fontsResult.errors.length,
-        images: 0,
-        svgs: 0,
-        favicons: 0,
-        manifest: result.summary,
-      },
-    });
+      });
+    }
   } else if (!skip.has(3)) {
     stages.push({
       name: 'assets',
       status: 'skipped',
       durationMs: 0,
       outputPaths: [],
-      summary: { reason: 'no font intercepts in extraction result' },
+      summary: { reason: 'extraction stage did not run' },
     });
   }
 
