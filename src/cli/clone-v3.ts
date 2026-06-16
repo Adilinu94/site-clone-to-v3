@@ -111,8 +111,8 @@ program
 
       // Post-extraction review (interactive mode only)
       if (wizardOpts.interactive && runResult.pipelineResult) {
-        await reviewDesignTokens(result.state, wizardOpts, runResult.pipelineResult);
-        await reviewSections(result.state, wizardOpts, runResult.pipelineResult);
+        await reviewDesignTokens(wizardOpts, runResult.pipelineResult);
+        await reviewSections(wizardOpts, runResult.pipelineResult);
       }
 
       console.log(chalk.green(`\n✓ Clone complete: ${result.state.hostname}`));
