@@ -13,6 +13,7 @@ build/
 # Test output
 coverage/
 .nyc_output/
+smoke*.txt
 
 # Env / Secrets
 .env
@@ -20,6 +21,9 @@ coverage/
 .env.*.local
 profiles.json
 .wp-targets.json
+
+# Local scripts (smoke tests, debug scripts)
+scripts/smoke-*.ts
 
 # Working dir (clones + extracted sections + reports)
 extracted-sections/
