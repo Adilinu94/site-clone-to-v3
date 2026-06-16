@@ -23,3 +23,12 @@ export function cachePath(hostname: string): string {
 export function researchPath(hostname: string): string {
   return path.join('research', hostname);
 }
+
+export function hostnameFromUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    return u.hostname.replace(/[^a-z0-9.-]/gi, '_').toLowerCase();
+  } catch {
+    return 'unknown-host';
+  }
+}

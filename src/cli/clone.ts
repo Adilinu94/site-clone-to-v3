@@ -17,8 +17,8 @@ function printHelp(): void {
 site-clone-to-v3 — Clone any URL to Elementor V3 (or V4)
 
 Usage:
-  clone run --url <url> [--output-dir <path>] [--sync-to-mcp] [--mcp-url <url>] [--stages 1,2,3,4,5]
-  clone dry-run --url <url> [--output-dir <path>] [--stages 1,2,3,4,5]
+  clone run --url <url> [--output-dir <path>] [--sync-to-mcp] [--mcp-url <url>] [--stages 1,2,3,4,5,6]
+  clone dry-run --url <url> [--output-dir <path>] [--stages 1,2,3,4,5,6]
   clone help
 
 Options:
@@ -27,7 +27,7 @@ Options:
   --sync-to-mcp         Push design tokens to WordPress via MCP
   --mcp-url <url>       MCP endpoint URL (default: Novamira-adrianv2 default)
   --mcp-auth <user:pass> Basic auth for MCP
-  --stages <n,n,...>    Run only these stages (1=extract, 2=classify, 3=assets, 4=tokens, 5=build)
+  --stages <n,n,...>    Run only these stages (1=extract, 2=classify, 3=assets, 4=tokens, 5=build, 6=animations)
 
 Examples:
   clone run --url https://example.com --output-dir ./clone
@@ -67,7 +67,10 @@ function parseArgs(argv: string[]): CliArgs {
         args.mcpAuth = argv[++i];
         break;
       case '--stages':
-        args.stages = (argv[++i] ?? '').split(',').map((s) => parseInt(s.trim(), 10)).filter(Number.isFinite);
+        args.stages = (argv[++i] ?? '')
+          .split(',')
+          .map((s) => parseInt(s.trim(), 10))
+          .filter((n) => !isNaN(n) && n >= 1 && n <= 6);
         break;
       default:
         throw new Error(`Unknown argument: ${a}`);
@@ -92,7 +95,7 @@ async function main(): Promise<void> {
     mcpUrl: args.mcpUrl,
     mcpAuth: args.mcpAuth,
     skipStages: args.stages
-      ? [1, 2, 3, 4, 5].filter((n) => !args.stages!.includes(n))
+      ? [1, 2, 3, 4, 5, 6].filter((n) => !args.stages!.includes(n))
       : undefined,
   };
 

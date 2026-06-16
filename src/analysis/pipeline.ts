@@ -1,17 +1,17 @@
 /**
- * Pipeline orchestrator (Phase 5 + 6 + 7).
+ * Pipeline orchestrator (Phase 4 + 5 + 6 + 7).
  *
- * 4-Stage-Pipeline:
+ * 6-Stage-Pipeline:
  *   Stage 1 (extract): Playwright → ExtractionResult + JSON-Outputs
  *   Stage 2 (classify): Section-Picker → SectionSpec[] + Manifest
- *   Stage 3 (tokens, optional): Design-Token-Sync via MCP
- *   Stage 4 (build): V3 + V4 page-data writers
- *   Stage 5 (animations, Phase 7): WPCode-Snippet-Plan aus Animations
+ *   Stage 3 (assets): Font-Downloader → manifest.json (fonts from extraction.fontsIntercepted)
+ *   Stage 4 (tokens, optional): Design-Token-Sync via MCP
+ *   Stage 5 (build): V3 + V4 page-data writers
+ *   Stage 6 (animations, Phase 7): WPCode-Snippet-Plan aus Animations
  *
- * The asset-downloader (images/fonts/svgs/favicons) used to live here
- * as Stage 3 but has been moved into a separate `clone assets`
- * subcommand — see BAUPLAN §Phase 4. The remaining pipeline stages
- * stay focused on the build path.
+ * The asset-downloader (fonts) is now integrated as Stage 3.
+ * Images, SVGs, and favicons require DOM extraction enhancement
+ * (ExtractionResult.dom cheerio-parsing) — see BAUPLAN §Phase 4.
  */
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
@@ -34,6 +34,15 @@ import {
   writeAnimationPlan,
   type AnimationPlan,
 } from '../builder/animation-injector.js';
+import {
+  downloadFonts,
+  type DownloadFontsResult,
+} from '../scraper/font-downloader.js';
+import {
+  buildAndWriteManifest,
+  summarizeManifest,
+  type AssetManifest,
+} from '../scraper/manifest-builder.js';
 
 export interface PipelineOptions extends ExtractionOptions {
   outputDir: string;
@@ -44,7 +53,7 @@ export interface PipelineOptions extends ExtractionOptions {
   skipStages?: number[];
 }
 
-export type StageName = 'extract' | 'classify' | 'tokens' | 'build' | 'animations';
+export type StageName = 'extract' | 'classify' | 'assets' | 'tokens' | 'build' | 'animations';
 
 export interface StageResult {
   name: StageName;
@@ -63,6 +72,7 @@ export interface PipelineResult {
   stages: StageResult[];
   extraction?: ExtractionResult;
   classification?: ClassifyResult;
+  assetManifest?: AssetManifest;
   sync?: SyncResult;
   animationPlan?: AnimationPlan;
   artifacts: Record<string, string>;
@@ -91,6 +101,7 @@ export async function runPipeline(
 
   let extraction: ExtractionResult | undefined;
   let classification: ClassifyAllResult | undefined;
+  let assetManifest: AssetManifest | undefined;
   let sync: SyncResult | undefined;
   let animationPlan: AnimationPlan | undefined;
 
@@ -146,8 +157,61 @@ export async function runPipeline(
     });
   }
 
-  // Stage 3: tokens (requires MCP + extraction.designTokens)
-  if (!skip.has(3) && extraction?.designTokens && options.syncToMcp) {
+  // Stage 3: assets (fonts from extraction.fontsIntercepted)
+  if (!skip.has(3) && extraction?.fontsIntercepted?.length) {
+    const assetsRoot = path.join(outputDir, 'assets');
+    await fs.mkdir(assetsRoot, { recursive: true });
+
+    const { result, ms } = await time(async () => {
+      const fontsResult: DownloadFontsResult = await downloadFonts(
+        extraction!.fontsIntercepted,
+        {
+          hostname: extraction!.hostname,
+          outputRoot: assetsRoot,
+        },
+      );
+      const { manifest } = await buildAndWriteManifest(
+        {
+          hostname: extraction!.hostname,
+          url,
+          fonts: fontsResult,
+        },
+        assetsRoot,
+      );
+      const summary = summarizeManifest(manifest);
+      return { fontsResult, manifest, summary };
+    });
+
+    assetManifest = result.manifest;
+    const manifestPath = path.join(assetsRoot, 'manifest.json');
+    artifacts['asset-manifest'] = manifestPath;
+
+    stages.push({
+      name: 'assets',
+      status: 'ok',
+      durationMs: ms,
+      outputPaths: [manifestPath],
+      summary: {
+        fonts: Object.keys(result.fontsResult.manifest).length,
+        fontErrors: result.fontsResult.errors.length,
+        images: 0,
+        svgs: 0,
+        favicons: 0,
+        manifest: result.summary,
+      },
+    });
+  } else if (!skip.has(3)) {
+    stages.push({
+      name: 'assets',
+      status: 'skipped',
+      durationMs: 0,
+      outputPaths: [],
+      summary: { reason: 'no font intercepts in extraction result' },
+    });
+  }
+
+  // Stage 4: tokens (requires MCP + extraction.designTokens)
+  if (!skip.has(4) && extraction?.designTokens && options.syncToMcp) {
     const { result, ms } = await time(async () => {
       const mcp = new McpAdapter({
         baseUrl: options.mcpUrl ?? 'https://test4.nick-webdesign.de/wp-json/mcp/novamira',
@@ -173,34 +237,38 @@ export async function runPipeline(
     });
   }
 
-  // Stage 4: build (V3 + V4)
-  if (!skip.has(4) && classification) {
-    const kept = classification.specs;
-    const v3Data = buildV3PageData(kept, url);
-    const v3Path = path.join(outputDir, 'page-v3.json');
-    await writeV3PageData(v3Data, v3Path);
-    artifacts['v3-build'] = v3Path;
+  // Stage 5: build (V3 + V4)
+  if (!skip.has(5) && classification) {
+    const { result, ms } = await time(async () => {
+      const kept = classification.specs;
+      const v3Data = buildV3PageData(kept, url);
+      const v3Path = path.join(outputDir, 'page-v3.json');
+      await writeV3PageData(v3Data, v3Path);
+      artifacts['v3-build'] = v3Path;
 
-    const v4Plan = buildV4Plan(kept, url);
-    const v4Path = path.join(outputDir, 'page-v4.json');
-    await writeV4Plan(v4Plan, v4Path);
-    artifacts['v4-build'] = v4Path;
+      const v4Plan = buildV4Plan(kept, url);
+      const v4Path = path.join(outputDir, 'page-v4.json');
+      await writeV4Plan(v4Plan, v4Path);
+      artifacts['v4-build'] = v4Path;
+
+      return { v3Path, v4Path, v4Plan };
+    });
 
     stages.push({
       name: 'build',
       status: 'ok',
-      durationMs: 0,
-      outputPaths: [v3Path, v4Path],
+      durationMs: ms,
+      outputPaths: [result.v3Path, result.v4Path],
       summary: {
-        sectionCount: v4Plan.summary.sectionCount,
-        widgetCount: v4Plan.summary.widgetCount,
-        classCount: v4Plan.summary.classes.length,
+        sectionCount: result.v4Plan.summary.sectionCount,
+        widgetCount: result.v4Plan.summary.widgetCount,
+        classCount: result.v4Plan.summary.classes.length,
       },
     });
   }
 
-  // Stage 5: animations (Phase 7) — WPCode snippet plan
-  if (!skip.has(5) && extraction) {
+  // Stage 6: animations (Phase 7) — WPCode snippet plan
+  if (!skip.has(6) && extraction) {
     const { result, ms } = await time(async () => {
       const plan = buildAnimationPlan({
         url,
@@ -233,6 +301,7 @@ export async function runPipeline(
     stages,
     extraction,
     classification,
+    assetManifest,
     sync,
     animationPlan,
     artifacts,
