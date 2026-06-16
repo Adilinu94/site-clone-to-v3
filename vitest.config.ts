@@ -4,13 +4,12 @@ export default defineConfig({
   test: {
     globals: false,
     environment: 'node',
-    include: ['tests/**/*.test.ts'],
     testTimeout: 30000,
-    coverage: {
-      provider: 'v8',
-      reporter: ['text', 'html', 'lcov'],
-      include: ['src/**/*.ts'],
-      exclude: ['src/**/*.d.ts', 'src/cli/**', 'src/index.ts'],
-    },
+    hookTimeout: 30000,
+    include: [
+      'tests/**/*.test.ts',
+    ],
+    // Tests use describe.skipIf(...) / it.skipIf(...) for live-integration gating
+    // Set INTEGRATION_LIVE=1 to enable live MCP-backed tests in CI.
   },
 });
