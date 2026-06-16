@@ -34,7 +34,20 @@ const program = new Command();
 program
   .name('clone-v3')
   .description('Clone any live website to Elementor V3 — pixel-accurate, on any WordPress with the Novamira plugin.')
-  .version(PACKAGE_VERSION);
+  .version(PACKAGE_VERSION)
+  .option('--format <fmt>', 'Output format: text|json (default text)', 'text')
+  .option('--timeout <seconds>', 'Global timeout in seconds for MCP/Playwright calls', '300')
+  .option('--no-color', 'Disable ANSI colors in output')
+  .hook('preAction', (_thisCommand) => {
+    const globalOpts = program.opts<{ format?: string; timeout?: string; color?: boolean }>();
+    if (globalOpts.color === false) {
+      process.env.NO_COLOR = '1';
+      chalk.level = 0;
+    }
+    if (globalOpts.format === 'json') {
+      process.env.CLONE_V3_FORMAT = 'json';
+    }
+  });
 
 program
   .command('clone [url]')
