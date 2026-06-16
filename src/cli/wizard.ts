@@ -50,6 +50,7 @@ export interface WizardResult {
   state: CloneState;
   resumeMode: boolean;
   dryRun: boolean;
+  interactive: boolean;
 }
 
 export interface LoadedState {
@@ -196,7 +197,7 @@ export async function runWizard(opts: WizardOptions): Promise<WizardResult> {
     }
   }
 
-  return { state, resumeMode, dryRun: false };
+  return { state, resumeMode, dryRun: false, interactive: opts.interactive };
 }
 
 async function buildFreshState(opts: WizardOptions, url: string): Promise<CloneState> {

@@ -7,14 +7,13 @@
  *   - chalk-based progress reporting (color-coded per stage)
  *   - Error recovery (mark failed phases, allow resume from last good state)
  *
- * Step-by-step mode (interactive):
+ * Step-by-step mode (BAUPLAN 9-step wizard):
  *   Phase 1: stages 1-2 (extract + classify) → design-token review → section review
- *   Phase 2: stages 3-6 (assets + tokens + build + animations)
+ *   Phase 2: stages 3-6 (assets + tokens + build + animations) with approved sections
  *
  * Used by the `clone` command in clone-v3.ts after the wizard gathers config.
  */
 import { runPipeline, type PipelineResult, type StageName } from '../analysis/pipeline.js';
-import type { ExtractionResult } from '../extractor/playwright-extractor.js';
 import type { ClassifyAllResult } from '../classifier/section-picker.js';
 import type { WizardOptions, WizardResult } from './wizard.js';
 import type { CloneState } from './state-manager.js';
@@ -74,10 +73,11 @@ export interface PipelineRunResult {
 /**
  * Runs the full pipeline with state tracking.
  *
- * Interactive mode (step-by-step):
+ * Interactive mode (step-by-step, BAUPLAN 9-step wizard):
  *   1. Extract + Classify (stages 1-2)
- *   2. Design-token review + section review (with user prompts)
+ *   2. Design-token review + interactive section review
  *   3. Assets + Tokens + Build + Animations (stages 3-6)
+ *      Build stage uses only approved sections.
  *
  * Non-interactive mode: runs all 6 stages in one shot.
  * Resume mode: skips already-completed phases in state.json.
@@ -85,13 +85,9 @@ export interface PipelineRunResult {
 export async function runWizardPipeline(
   wizardResult: WizardResult,
 ): Promise<PipelineRunResult> {
-  const { state, resumeMode } = wizardResult;
+  const { state, resumeMode, interactive } = wizardResult;
   const stateFile = stateFileFor(state.outputDir, state.hostname);
   const outputDir = `${state.outputDir}/${state.hostname}`;
-  const isInteractive = wizardResult.state.options.target
-    ? true // If a WP target is configured, assume interactive (wizard ran)
-    : false;
-  const interactive = isInteractive && !resumeMode;
 
   console.log(chalk.bold.cyan(`\n╭${'─'.repeat(56)}╮`));
   console.log(chalk.bold.cyan(`│  site-clone-to-v3 — Pipeline Execution${' '.repeat(22)}│`));
@@ -110,14 +106,9 @@ export async function runWizardPipeline(
   // Compute resume skips
   const skipStages = computeResumeSkips(state, resumeMode);
 
-  if (resumeMode) {
-    // Resume: run all remaining stages in one shot
-    return runPhase(state, stateFile, outputDir, skipStages, []);
-  }
-
-  if (!interactive) {
-    // Non-interactive: run all 6 stages in one shot
-    return runPhase(state, stateFile, outputDir, skipStages, []);
+  if (resumeMode || !interactive) {
+    // Resume or non-interactive: run all remaining stages in one shot
+    return runPhase(state, stateFile, outputDir, skipStages);
   }
 
   // ─────────────── Interactive: two-phase step-by-step ───────────────
@@ -125,7 +116,7 @@ export async function runWizardPipeline(
   // Phase 1: Extract + Classify (stages 1-2)
   console.log(chalk.bold.magenta('╭── Phase 1 of 2: Extract + Classify ──╮\n'));
   const phase1Skip = new Set([...skipStages, 3, 4, 5, 6]);
-  const phase1 = await runPhase(state, stateFile, outputDir, phase1Skip, []);
+  const phase1 = await runPhase(state, stateFile, outputDir, phase1Skip);
   const phase1Result = phase1.pipelineResult;
 
   if (!phase1Result?.extraction) {
@@ -137,24 +128,31 @@ export async function runWizardPipeline(
   await reviewDesignTokensFromResult(phase1Result);
 
   // ── Section Review (BAUPLAN Steps 8-9) ──
-  const approvedIds = await reviewSectionsFromResult(
-    state,
-    interactive,
-    phase1Result,
-  );
+  const approvedIds = await reviewSectionsFromResult(state, phase1Result);
 
   // ─────────────── Phase 2: Remaining stages (3-6) ───────────────
   console.log(chalk.bold.magenta('\n╭── Phase 2 of 2: Assets + Tokens + Build + Animations ──╮\n'));
+
+  // Filter classification specs to only approved sections
+  const phase1Classification = phase1Result.classification as ClassifyAllResult | undefined;
+  const filteredClassification: ClassifyAllResult | undefined = phase1Classification
+    ? {
+        ...phase1Classification,
+        specs: phase1Classification.specs.filter((s) =>
+          approvedIds.includes(s.section_id),
+        ),
+      }
+    : undefined;
 
   const phase2Skip = new Set([...skipStages, 1, 2]);
   const phase2 = await runPipeline(state.sourceUrl, {
     url: state.sourceUrl,
     outputDir,
     dryRun: false,
-    syncToMcp: !!state.options.target,
+    syncToMcp: !!state.options.target && approvedIds.length > 0,
     skipStages: [...phase2Skip],
     preloadedExtraction: phase1Result.extraction,
-    preloadedClassification: phase1Result.classification as ClassifyAllResult | undefined,
+    preloadedClassification: filteredClassification,
   });
 
   // Update state from phase 2 stages
@@ -167,7 +165,12 @@ export async function runWizardPipeline(
   printPipelineSummary({ ...phase2, stages: mergedStages });
 
   return {
-    pipelineResult: { ...phase2, stages: mergedStages, extraction: phase1Result.extraction, classification: phase1Result.classification },
+    pipelineResult: {
+      ...phase2,
+      stages: mergedStages,
+      extraction: phase1Result.extraction,
+      classification: phase1Result.classification,
+    },
     state,
     stateFile,
     approvedSectionIds: approvedIds,
@@ -205,7 +208,6 @@ async function runPhase(
   stateFile: string,
   outputDir: string,
   skipStages: Set<number>,
-  _approvedIds: string[],
 ): Promise<PipelineRunResult> {
   let pipelineResult: PipelineResult;
   try {
@@ -336,7 +338,6 @@ async function reviewDesignTokensFromResult(
 /** Interactive section review — prompts user to approve/reject detected sections. */
 async function reviewSectionsFromResult(
   state: CloneState,
-  interactive: boolean,
   pipelineResult: PipelineResult,
 ): Promise<string[]> {
   const classification = pipelineResult.classification;
@@ -357,23 +358,18 @@ async function reviewSectionsFromResult(
 
   let approved: string[];
 
-  if (interactive) {
-    console.log('');
-    const autoPick = await promptAutoPick();
-    if (autoPick) {
-      approved = sectionChoices.map((s) => s.id);
-      console.log(chalk.green(`  ✓ Auto-approved all ${approved.length} sections`));
-    } else {
-      approved = await promptSections(sectionChoices);
-      if (approved.length === 0) {
-        console.log(chalk.yellow('  ⚠ No sections selected — build will produce an empty page'));
-      } else {
-        console.log(chalk.green(`  ✓ ${approved.length}/${sectionChoices.length} sections approved`));
-      }
-    }
-  } else {
+  console.log('');
+  const autoPick = await promptAutoPick();
+  if (autoPick) {
     approved = sectionChoices.map((s) => s.id);
-    console.log(chalk.gray(`  (non-interactive — approving all ${approved.length} sections)`));
+    console.log(chalk.green(`  ✓ Auto-approved all ${approved.length} sections`));
+  } else {
+    approved = await promptSections(sectionChoices);
+    if (approved.length === 0) {
+      console.log(chalk.yellow('  ⚠ No sections selected — build will produce an empty page'));
+    } else {
+      console.log(chalk.green(`  ✓ ${approved.length}/${sectionChoices.length} sections approved`));
+    }
   }
 
   // Save approved sections to state
@@ -393,10 +389,9 @@ async function reviewSectionsFromResult(
   return approved;
 }
 
-// ── Public exports for external callers (clone-v3.ts post-pipeline review) ──
+// ── Public exports (for external callers) ──
 
 export async function reviewDesignTokens(
-  _wizardOpts: WizardOptions,
   pipelineResult: PipelineResult,
 ): Promise<void> {
   await reviewDesignTokensFromResult(pipelineResult);
@@ -404,8 +399,7 @@ export async function reviewDesignTokens(
 
 export async function reviewSections(
   state: CloneState,
-  wizardOpts: WizardOptions,
   pipelineResult: PipelineResult,
 ): Promise<string[]> {
-  return reviewSectionsFromResult(state, wizardOpts.interactive, pipelineResult);
+  return reviewSectionsFromResult(state, pipelineResult);
 }
