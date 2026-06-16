@@ -13,10 +13,8 @@ import { runPipeline, type PipelineResult, type StageName } from '../analysis/pi
 import type { WizardOptions, WizardResult } from './wizard.js';
 import type { CloneState } from './state-manager.js';
 import {
-  loadState,
   saveState,
   stateFileFor,
-  markRunning,
   markCompleted,
   markFailed,
   markSkipped,
@@ -33,7 +31,7 @@ const STAGE_TO_PHASE: Record<StageName, PhaseName> = {
   assets: 'assets',
   tokens: 'tokens',
   build: 'build',
-  animations: 'auto-fix', // animations phase is closest to auto-fix
+  animations: 'auto-fix', // animations → auto-fix (closest match in PhaseName; see BAUPLAN §9)
 };
 
 const PHASE_LABELS: Record<PhaseName, string> = {
@@ -129,7 +127,7 @@ export async function runWizardPipeline(
   }
 
   // Update state.json after successful pipeline run
-  await syncStateFromPipeline(state, stateFile, pipelineResult, skipStages);
+  await syncStateFromPipeline(state, stateFile, pipelineResult);
 
   // ── Print pipeline summary ──
   printPipelineSummary(pipelineResult);
@@ -145,29 +143,13 @@ async function syncStateFromPipeline(
   state: CloneState,
   stateFile: string,
   pipelineResult: PipelineResult,
-  skipStages: Set<number>,
 ): Promise<void> {
-  const stageNumbers: Record<StageName, number> = {
-    extract: 1,
-    classify: 2,
-    assets: 3,
-    tokens: 4,
-    build: 5,
-    animations: 6,
-  };
-
   for (const stage of pipelineResult.stages) {
     const phase = STAGE_TO_PHASE[stage.name];
-    const stageNum = stageNumbers[stage.name];
-
-    if (skipStages.has(stageNum)) {
-      // Already skipped during resume
-      continue;
-    }
 
     switch (stage.status) {
       case 'ok':
-        markCompleted(state, phase, stageArtifacts(stage.name, pipelineResult));
+        markCompleted(state, phase, { ...pipelineResult.artifacts });
         break;
       case 'skipped':
         markSkipped(state, phase);
@@ -179,17 +161,6 @@ async function syncStateFromPipeline(
   }
 
   await saveState(stateFile, state);
-}
-
-function stageArtifacts(
-  stage: StageName,
-  result: PipelineResult,
-): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(result.artifacts)) {
-    out[k] = v;
-  }
-  return out;
 }
 
 function printPipelineSummary(result: PipelineResult): void {
@@ -235,10 +206,12 @@ function printPipelineSummary(result: PipelineResult): void {
 /**
  * Post-extraction review: show detected design tokens for user approval.
  * Called after Stage 1 (extract) completes, before proceeding to remaining stages.
+ *
+ * DesignTokens uses a semantic record model (colors is Record<SemanticColor, ColorToken|null>,
+ * fonts is {heading, body, mono}, spacing is {sectionPadding, containerWidth}).
  */
 export async function reviewDesignTokens(
-  state: CloneState,
-  wizardOpts: WizardOptions,
+  _wizardOpts: WizardOptions,
   pipelineResult: PipelineResult,
 ): Promise<void> {
   const extraction = pipelineResult.extraction;
@@ -248,56 +221,62 @@ export async function reviewDesignTokens(
   }
 
   const tokens = extraction.designTokens;
-  const colorCount = tokens.colors?.length ?? 0;
-  const fontCount = tokens.fonts?.length ?? 0;
-  const spacingCount = tokens.spacing?.length ?? 0;
+  const colorKeys = Object.keys(tokens.colors).filter(
+    (k) => tokens.colors[k as keyof typeof tokens.colors] !== null,
+  );
+  const fontKeys = Object.keys(tokens.fonts).filter(
+    (k) => tokens.fonts[k as keyof typeof tokens.fonts] !== undefined,
+  );
+  const spacing = tokens.spacing;
 
   console.log(chalk.bold.cyan('\n╭── Design Token Review ──╮'));
   console.log(
     chalk.gray(
-      `  ${colorCount} colors · ${fontCount} fonts · ${spacingCount} spacing tokens detected`,
+      `  ${colorKeys.length} colors · ${fontKeys.length} fonts · spacing detected`,
     ),
   );
 
-  if (colorCount > 0) {
+  if (colorKeys.length > 0) {
     console.log(chalk.white('\n  Colors:'));
-    for (const c of tokens.colors!.slice(0, 12)) {
-      const hex = c.value ?? '';
-      const name = c.name ?? c.originalName ?? '';
-      console.log(`    ${chalk.hex(hex || '#888')('■')} ${name}  ${chalk.gray(hex)}`);
+    for (const key of colorKeys.slice(0, 12)) {
+      const token = tokens.colors[key as keyof typeof tokens.colors];
+      const hex = token?.hex ?? '';
+      console.log(`    ${chalk.hex(hex || '#888')('■')} ${key}  ${chalk.gray(hex)}`);
     }
-    if (colorCount > 12) {
-      console.log(chalk.gray(`    ... and ${colorCount - 12} more`));
+    if (colorKeys.length > 12) {
+      console.log(chalk.gray(`    ... and ${colorKeys.length - 12} more`));
     }
   }
 
-  if (fontCount > 0) {
+  if (fontKeys.length > 0) {
     console.log(chalk.white('\n  Fonts:'));
-    for (const f of tokens.fonts!.slice(0, 8)) {
-      console.log(chalk.gray(`    ${f.family ?? f.name ?? 'unknown'}`));
-    }
-    if (fontCount > 8) {
-      console.log(chalk.gray(`    ... and ${fontCount - 8} more`));
+    for (const key of fontKeys) {
+      const font = tokens.fonts[key as keyof typeof tokens.fonts];
+      console.log(chalk.gray(`    ${key}: ${font?.family ?? 'system'}`));
     }
   }
 
-  console.log(chalk.gray('\n  (Token sync runs in Stage 4 with --sync-to-mcp)'));
+  console.log(
+    chalk.gray(
+      `\n  Spacing: section-padding=${spacing.sectionPadding}px, container-width=${spacing.containerWidth}px`,
+    ),
+  );
+  console.log(chalk.gray('  (Token sync runs in Stage 4 with --sync-to-mcp)'));
   console.log('');
 }
 
 /**
- * Post-classification review: show detected sections for user approval.
+ * Post-classification review: show detected sections.
  * Called after Stage 2 (classify) completes, if running interactively.
  */
 export async function reviewSections(
-  state: CloneState,
-  wizardOpts: WizardOptions,
+  _wizardOpts: WizardOptions,
   pipelineResult: PipelineResult,
-): Promise<string[]> {
+): Promise<void> {
   const classification = pipelineResult.classification;
   if (!classification?.specs || classification.specs.length === 0) {
     console.log(chalk.gray('  No sections detected — skipping review.'));
-    return [];
+    return;
   }
 
   console.log(chalk.bold.cyan('\n╭── Section Review ──╮'));
@@ -305,18 +284,24 @@ export async function reviewSections(
   console.log('');
 
   for (const spec of classification.specs.slice(0, 15)) {
-    const type = spec.type ?? 'unknown';
     const id = spec.section_id ?? '?';
-    console.log(chalk.gray(`  [${type}] ${id}`));
+    const selector = spec.source?.selector ?? id;
+    console.log(chalk.gray(`  [${id}] ${selector}`));
   }
 
   if (classification.specs.length > 15) {
     console.log(chalk.gray(`  ... and ${classification.specs.length - 15} more`));
   }
 
-  console.log(chalk.gray(`\n  Approved: ${classification.selectedManifest?.approved_count ?? classification.specs.length}`));
-  console.log(chalk.gray(`  Skipped:  ${classification.selectedManifest?.skipped_count ?? 0}`));
+  console.log(
+    chalk.gray(
+      `\n  Approved: ${classification.selectedManifest?.approved_count ?? classification.specs.length}`,
+    ),
+  );
+  console.log(
+    chalk.gray(
+      `  Skipped:  ${classification.selectedManifest?.skipped_count ?? 0}`,
+    ),
+  );
   console.log('');
-
-  return classification.specs.map((s) => s.section_id);
 }
