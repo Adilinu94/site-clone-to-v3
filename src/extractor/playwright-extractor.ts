@@ -20,6 +20,9 @@ import {
   type ExtractionResult,
   type AnimationInfo,
   type FontIntercept,
+  type DiscoveredImage,
+  type DiscoveredSvg,
+  type DiscoveredFavicon,
 } from './types.js';
 
 // Re-export the public types so downstream consumers (pipeline.ts,
@@ -29,6 +32,9 @@ export type {
   ExtractionResult,
   AnimationInfo,
   FontIntercept,
+  DiscoveredImage,
+  DiscoveredSvg,
+  DiscoveredFavicon,
   SectionInfo,
   ComputedStyleSnapshot,
 } from './types.js';
@@ -92,6 +98,97 @@ async function extractCssVariables(page: Page): Promise<Record<string, string>> 
       }
     }
     return vars;
+  });
+}
+
+/** Collect images, SVGs, and favicon/OG data from the live DOM.
+ *  Runs after hydration + lazy-scroll so all dynamic content is present. */
+async function collectAssets(page: Page): Promise<{
+  images: DiscoveredImage[];
+  svgs: DiscoveredSvg[];
+  favicons: DiscoveredFavicon[];
+}> {
+  return await page.evaluate(() => {
+    // ── Images: <img src>, <picture><source srcset> ──
+    const images: DiscoveredImage[] = [];
+    const seenImageUrls = new Set<string>();
+    for (const img of document.querySelectorAll('img[src]')) {
+      const src = (img as HTMLImageElement).src;
+      if (!src || src.startsWith('data:') || src.startsWith('blob:') || seenImageUrls.has(src)) continue;
+      seenImageUrls.add(src);
+      images.push({ url: src, alt: (img as HTMLImageElement).alt || undefined });
+    }
+    // <picture> elements: grab first <source> with a valid srcset
+    for (const pic of document.querySelectorAll('picture')) {
+      const source = pic.querySelector('source[srcset]');
+      if (!source) continue;
+      const srcset = source.getAttribute('srcset') ?? '';
+      const firstUrl = srcset.split(',')[0]?.trim()?.split(/\s+/)[0];
+      if (firstUrl && !firstUrl.startsWith('data:') && !seenImageUrls.has(firstUrl)) {
+        seenImageUrls.add(firstUrl);
+        images.push({ url: firstUrl });
+      }
+    }
+
+    // ── SVGs: inline <svg> + <img src="*.svg"> ──
+    const svgs: DiscoveredSvg[] = [];
+    const seenSvgHashes = new Set<string>();
+    // Inline SVGs
+    for (const svgEl of document.querySelectorAll('svg')) {
+      // Skip very small SVGs (likely icons in icon-fonts, not content)
+      const markup = svgEl.outerHTML;
+      if (markup.length < 80) continue;
+      // Simple hash to deduplicate identical SVGs
+      const hash = markup.length.toString(36) + '-' + markup.slice(0, 50).replace(/\s+/g, '');
+      if (seenSvgHashes.has(hash)) continue;
+      seenSvgHashes.add(hash);
+      svgs.push({
+        kind: 'inline',
+        markup,
+        existingId: svgEl.id || undefined,
+        sourceElement: svgEl.tagName + (svgEl.id ? '#' + svgEl.id : '') + (svgEl.className ? '.' + String(svgEl.className).split(' ').join('.') : ''),
+      });
+    }
+    // External SVGs referenced via <img>
+    for (const img of document.querySelectorAll('img[src$=".svg" i]')) {
+      const src = (img as HTMLImageElement).src;
+      if (!src || src.startsWith('data:')) continue;
+      svgs.push({ kind: 'external', url: src });
+    }
+
+    // ── Favicons/OG: <link rel="icon">, <meta property="og:image">, etc. ──
+    const favicons: DiscoveredFavicon[] = [];
+    const seenFaviconUrls = new Set<string>();
+    const addFavicon = (url: string, kind: DiscoveredFavicon['kind'], sizes?: string, type?: string) => {
+      if (!url || url.startsWith('data:') || seenFaviconUrls.has(url)) return;
+      seenFaviconUrls.add(url);
+      favicons.push({ url, kind, ...(sizes ? { sizes } : {}), ...(type ? { type } : {}) });
+    };
+
+    for (const link of document.querySelectorAll('link[rel*="icon"]')) {
+      const rel = (link.getAttribute('rel') ?? '').toLowerCase();
+      const href = (link as HTMLLinkElement).href;
+      const sizes = link.getAttribute('sizes') ?? undefined;
+      const typeAttr = link.getAttribute('type') ?? undefined;
+      let kind: DiscoveredFavicon['kind'] = 'favicon';
+      if (rel === 'apple-touch-icon' || rel === 'apple-touch-icon-precomposed') kind = 'apple-touch-icon';
+      else if (rel === 'shortcut icon') kind = 'shortcut-icon';
+      else if (rel === 'icon') kind = 'icon';
+      else if (rel === 'manifest') kind = 'manifest-icon';
+      addFavicon(href, kind, sizes, typeAttr);
+    }
+
+    // OG / Twitter meta images
+    for (const meta of document.querySelectorAll('meta[property], meta[name]')) {
+      const prop = meta.getAttribute('property') || meta.getAttribute('name') || '';
+      const content = meta.getAttribute('content');
+      if (!content) continue;
+      if (prop === 'og:image' || prop === 'og:image:url') addFavicon(content, 'og-image');
+      else if (prop === 'og:image:secure_url') addFavicon(content, 'og-image-secure');
+      else if (prop === 'twitter:image' || prop === 'twitter:image:src') addFavicon(content, 'twitter-image');
+    }
+
+    return { images, svgs, favicons };
   });
 }
 
@@ -230,6 +327,9 @@ export async function extractFromUrl(options: ExtractionOptions): Promise<Extrac
       ? await detectSections(page, { maxSections: options.maxSections })
       : [];
 
+    // Phase 4: Asset collection (images, SVGs, favicons from live DOM)
+    const assets = await collectAssets(page);
+
     // Sprint 2C: Computed-Style-Walk (single viewport by default, multi if requested)
     let computedStyles: Record<string, import('./types.js').ComputedStyleSnapshot[]> | undefined;
     if (options.detectResponsiveStyles === true) {
@@ -288,6 +388,9 @@ export async function extractFromUrl(options: ExtractionOptions): Promise<Extrac
       animations,
       computedStyles,
       designTokens,
+      images: assets.images,
+      svgs: assets.svgs,
+      favicons: assets.favicons,
     };
 
     await fs.writeFile(
@@ -305,6 +408,10 @@ export async function extractFromUrl(options: ExtractionOptions): Promise<Extrac
     await fs.writeFile(
       path.join(options.outputDir, 'sections.json'),
       JSON.stringify(sections, null, 2),
+    );
+    await fs.writeFile(
+      path.join(options.outputDir, 'assets-detected.json'),
+      JSON.stringify({ images: assets.images, svgs: assets.svgs, favicons: assets.favicons }, null, 2),
     );
     if (computedStyles) {
       await fs.writeFile(

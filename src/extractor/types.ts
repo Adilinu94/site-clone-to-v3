@@ -74,6 +74,30 @@ export interface ComputedStyleSnapshot {
   styles: Record<string, string>;
 }
 
+/** A discovered image from the DOM (<img>, <picture>, CSS background-image). */
+export interface DiscoveredImage {
+  url: string;
+  alt?: string;
+}
+
+/** A discovered SVG from the DOM (inline markup or external URL).
+ *  Compatible with scraper/svg-downloader's SvgSource type. */
+export interface DiscoveredSvg {
+  kind: 'inline' | 'external';
+  url?: string;
+  markup?: string;
+  existingId?: string;
+  sourceElement?: string;
+}
+
+/** A discovered favicon / OG-image from <link> / <meta> tags. */
+export interface DiscoveredFavicon {
+  url: string;
+  kind: 'apple-touch-icon' | 'icon' | 'shortcut-icon' | 'og-image' | 'og-image-secure' | 'twitter-image' | 'manifest-icon' | 'favicon';
+  sizes?: string;
+  type?: string;
+}
+
 /** Top-level extraction options. */
 export interface ExtractionOptions {
   /** Source URL to extract from. */
@@ -127,4 +151,10 @@ export interface ExtractionResult {
   computedStyles?: Record<string, ComputedStyleSnapshot[]>;
   /** Phase 2.5: design tokens derived from computed styles + CSS variables. */
   designTokens?: import('../analyzer/design-token-extractor.js').DesignTokens;
+  /** Phase 4: discovered images (<img>, <picture>, CSS backgrounds). */
+  images: DiscoveredImage[];
+  /** Phase 4: discovered SVGs (inline markup + external URLs). */
+  svgs: DiscoveredSvg[];
+  /** Phase 4: discovered favicons / OG-images. */
+  favicons: DiscoveredFavicon[];
 }
