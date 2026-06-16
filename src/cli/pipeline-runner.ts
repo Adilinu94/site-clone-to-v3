@@ -7,9 +7,15 @@
  *   - chalk-based progress reporting (color-coded per stage)
  *   - Error recovery (mark failed phases, allow resume from last good state)
  *
+ * Step-by-step mode (interactive):
+ *   Phase 1: stages 1-2 (extract + classify) → design-token review → section review
+ *   Phase 2: stages 3-6 (assets + tokens + build + animations)
+ *
  * Used by the `clone` command in clone-v3.ts after the wizard gathers config.
  */
 import { runPipeline, type PipelineResult, type StageName } from '../analysis/pipeline.js';
+import type { ExtractionResult } from '../extractor/playwright-extractor.js';
+import type { ClassifyAllResult } from '../classifier/section-picker.js';
 import type { WizardOptions, WizardResult } from './wizard.js';
 import type { CloneState } from './state-manager.js';
 import {
@@ -20,8 +26,14 @@ import {
   markSkipped,
   isPhaseDone,
   reconcile,
+  approveSection,
   type PhaseName,
 } from './state-manager.js';
+import {
+  promptAutoPick,
+  promptSections,
+  type SectionChoice,
+} from './prompts.js';
 import chalk from 'chalk';
 
 /** Maps pipeline StageName to state-manager PhaseName. */
@@ -31,7 +43,7 @@ const STAGE_TO_PHASE: Record<StageName, PhaseName> = {
   assets: 'assets',
   tokens: 'tokens',
   build: 'build',
-  animations: 'auto-fix', // animations → auto-fix (closest match in PhaseName; see BAUPLAN §9)
+  animations: 'auto-fix',
 };
 
 const PHASE_LABELS: Record<PhaseName, string> = {
@@ -55,33 +67,115 @@ export interface PipelineRunResult {
   pipelineResult?: PipelineResult;
   state: CloneState;
   stateFile: string;
+  /** The approved section IDs from the interactive review. */
+  approvedSectionIds?: string[];
 }
 
 /**
  * Runs the full pipeline with state tracking.
  *
- * On resume: skips phases already marked 'completed' in state.json.
- * On error: marks the phase as 'failed', saves state, and re-throws.
+ * Interactive mode (step-by-step):
+ *   1. Extract + Classify (stages 1-2)
+ *   2. Design-token review + section review (with user prompts)
+ *   3. Assets + Tokens + Build + Animations (stages 3-6)
+ *
+ * Non-interactive mode: runs all 6 stages in one shot.
+ * Resume mode: skips already-completed phases in state.json.
  */
 export async function runWizardPipeline(
   wizardResult: WizardResult,
 ): Promise<PipelineRunResult> {
   const { state, resumeMode } = wizardResult;
   const stateFile = stateFileFor(state.outputDir, state.hostname);
+  const outputDir = `${state.outputDir}/${state.hostname}`;
+  const isInteractive = wizardResult.state.options.target
+    ? true // If a WP target is configured, assume interactive (wizard ran)
+    : false;
+  const interactive = isInteractive && !resumeMode;
 
   console.log(chalk.bold.cyan(`\n╭${'─'.repeat(56)}╮`));
   console.log(chalk.bold.cyan(`│  site-clone-to-v3 — Pipeline Execution${' '.repeat(22)}│`));
   console.log(chalk.bold.cyan(`╰${'─'.repeat(56)}╯`));
   console.log(chalk.gray(`  URL:      ${state.sourceUrl}`));
-  console.log(chalk.gray(`  Output:   ${state.outputDir}/${state.hostname}`));
+  console.log(chalk.gray(`  Output:   ${outputDir}`));
   if (resumeMode) {
     const nextPhase = reconcile(state);
     console.log(chalk.yellow(`  Resume:   from phase "${nextPhase}"`));
   }
+  if (interactive) {
+    console.log(chalk.cyan(`  Mode:     step-by-step (BAUPLAN 9-step wizard)`));
+  }
   console.log('');
 
-  // Determine which stages to skip based on state.json phase status
-  const skipStages = new Set<number>();
+  // Compute resume skips
+  const skipStages = computeResumeSkips(state, resumeMode);
+
+  if (resumeMode) {
+    // Resume: run all remaining stages in one shot
+    return runPhase(state, stateFile, outputDir, skipStages, []);
+  }
+
+  if (!interactive) {
+    // Non-interactive: run all 6 stages in one shot
+    return runPhase(state, stateFile, outputDir, skipStages, []);
+  }
+
+  // ─────────────── Interactive: two-phase step-by-step ───────────────
+
+  // Phase 1: Extract + Classify (stages 1-2)
+  console.log(chalk.bold.magenta('╭── Phase 1 of 2: Extract + Classify ──╮\n'));
+  const phase1Skip = new Set([...skipStages, 3, 4, 5, 6]);
+  const phase1 = await runPhase(state, stateFile, outputDir, phase1Skip, []);
+  const phase1Result = phase1.pipelineResult;
+
+  if (!phase1Result?.extraction) {
+    console.log(chalk.red('  ✗ Phase 1 failed — no extraction result. Aborting.'));
+    return phase1;
+  }
+
+  // ── Design Token Review (BAUPLAN Step 7) ──
+  await reviewDesignTokensFromResult(phase1Result);
+
+  // ── Section Review (BAUPLAN Steps 8-9) ──
+  const approvedIds = await reviewSectionsFromResult(
+    state,
+    interactive,
+    phase1Result,
+  );
+
+  // ─────────────── Phase 2: Remaining stages (3-6) ───────────────
+  console.log(chalk.bold.magenta('\n╭── Phase 2 of 2: Assets + Tokens + Build + Animations ──╮\n'));
+
+  const phase2Skip = new Set([...skipStages, 1, 2]);
+  const phase2 = await runPipeline(state.sourceUrl, {
+    url: state.sourceUrl,
+    outputDir,
+    dryRun: false,
+    syncToMcp: !!state.options.target,
+    skipStages: [...phase2Skip],
+    preloadedExtraction: phase1Result.extraction,
+    preloadedClassification: phase1Result.classification as ClassifyAllResult | undefined,
+  });
+
+  // Update state from phase 2 stages
+  await syncStateFromPipeline(state, stateFile, phase2);
+
+  // Merge phase 1 + phase 2 stage results
+  const mergedStages = [...(phase1.pipelineResult?.stages ?? []), ...phase2.stages];
+
+  // Print combined summary
+  printPipelineSummary({ ...phase2, stages: mergedStages });
+
+  return {
+    pipelineResult: { ...phase2, stages: mergedStages, extraction: phase1Result.extraction, classification: phase1Result.classification },
+    state,
+    stateFile,
+    approvedSectionIds: approvedIds,
+  };
+}
+
+/** Compute which stages to skip based on resume state. */
+function computeResumeSkips(state: CloneState, resumeMode: boolean): Set<number> {
   const stageNumbers: Record<StageName, number> = {
     extract: 1,
     classify: 2,
@@ -91,54 +185,53 @@ export async function runWizardPipeline(
     animations: 6,
   };
 
-  if (resumeMode) {
-    for (const [stage, num] of Object.entries(stageNumbers)) {
-      const phase = STAGE_TO_PHASE[stage as StageName];
-      if (isPhaseDone(state, phase)) {
-        skipStages.add(num);
-        console.log(chalk.gray(`  ⏭ Skip stage ${num} (${stage}) — already completed`));
-      }
-    }
-    console.log('');
-  }
+  const skipStages = new Set<number>();
+  if (!resumeMode) return skipStages;
 
-  // Run pipeline
+  for (const [stage, num] of Object.entries(stageNumbers)) {
+    const phase = STAGE_TO_PHASE[stage as StageName];
+    if (isPhaseDone(state, phase)) {
+      skipStages.add(num);
+      console.log(chalk.gray(`  ⏭ Skip stage ${num} (${stage}) — already completed`));
+    }
+  }
+  if (skipStages.size > 0) console.log('');
+  return skipStages;
+}
+
+/** Run a single pipeline call with error handling and state sync. */
+async function runPhase(
+  state: CloneState,
+  stateFile: string,
+  outputDir: string,
+  skipStages: Set<number>,
+  _approvedIds: string[],
+): Promise<PipelineRunResult> {
   let pipelineResult: PipelineResult;
   try {
     pipelineResult = await runPipeline(state.sourceUrl, {
       url: state.sourceUrl,
-      outputDir: `${state.outputDir}/${state.hostname}`,
+      outputDir,
       dryRun: false,
-      syncToMcp: !!state.options.target, // Only sync if WP target configured
+      syncToMcp: !!state.options.target,
       skipStages: skipStages.size > 0 ? [...skipStages] : undefined,
     });
   } catch (err) {
     console.error(chalk.red(`\n✗ Pipeline failed: ${err instanceof Error ? err.message : err}`));
-
-    // Mark the failing phase
     const nextPhase = reconcile(state);
     if (nextPhase) {
       markFailed(state, nextPhase, err instanceof Error ? err.message : String(err));
       await saveState(stateFile, state);
       console.log(chalk.gray(`  State saved → ${stateFile} (resume from "${nextPhase}")`));
     }
-
     throw err;
   }
 
-  // Update state.json after successful pipeline run
   await syncStateFromPipeline(state, stateFile, pipelineResult);
-
-  // ── Print pipeline summary ──
-  printPipelineSummary(pipelineResult);
-
   return { pipelineResult, state, stateFile };
 }
 
-/**
- * Syncs CloneState phases with pipeline stage results.
- * Marks each stage as completed/skipped and saves state.json.
- */
+/** Syncs CloneState phases with pipeline stage results. */
 async function syncStateFromPipeline(
   state: CloneState,
   stateFile: string,
@@ -146,7 +239,6 @@ async function syncStateFromPipeline(
 ): Promise<void> {
   for (const stage of pipelineResult.stages) {
     const phase = STAGE_TO_PHASE[stage.name];
-
     switch (stage.status) {
       case 'ok':
         markCompleted(state, phase, { ...pipelineResult.artifacts });
@@ -159,7 +251,6 @@ async function syncStateFromPipeline(
         break;
     }
   }
-
   await saveState(stateFile, state);
 }
 
@@ -173,23 +264,18 @@ function printPipelineSummary(result: PipelineResult): void {
   console.log(chalk.bold.cyan(`│  Pipeline Complete${' '.repeat(39)}│`));
   console.log(chalk.bold.cyan(`╰${'─'.repeat(56)}╯`));
   console.log(
-    chalk.gray(
-      `  ${okCount} ok · ${skippedCount} skipped · ${failedCount} failed · ${totalMs}ms total`,
-    ),
+    chalk.gray(`  ${okCount} ok · ${skippedCount} skipped · ${failedCount} failed · ${totalMs}ms total`),
   );
   console.log('');
 
   for (const stage of result.stages) {
     const label = PHASE_LABELS[STAGE_TO_PHASE[stage.name]] ?? stage.name;
     const icon =
-      stage.status === 'ok'
-        ? chalk.green('✓')
-        : stage.status === 'skipped'
-          ? chalk.gray('⏭')
-          : chalk.red('✗');
+      stage.status === 'ok' ? chalk.green('✓')
+      : stage.status === 'skipped' ? chalk.gray('⏭')
+      : chalk.red('✗');
     const timing = chalk.gray(`(${stage.durationMs}ms)`);
     console.log(`  ${icon} ${chalk.white(label)} ${timing}`);
-
     if (stage.status === 'failed' && stage.error) {
       console.log(chalk.red(`    Error: ${stage.error}`));
     }
@@ -203,15 +289,8 @@ function printPipelineSummary(result: PipelineResult): void {
   console.log('');
 }
 
-/**
- * Post-extraction review: show detected design tokens for user approval.
- * Called after Stage 1 (extract) completes, before proceeding to remaining stages.
- *
- * DesignTokens uses a semantic record model (colors is Record<SemanticColor, ColorToken|null>,
- * fonts is {heading, body, mono}, spacing is {sectionPadding, containerWidth}).
- */
-export async function reviewDesignTokens(
-  _wizardOpts: WizardOptions,
+/** Display design tokens from extraction result (read-only). */
+async function reviewDesignTokensFromResult(
   pipelineResult: PipelineResult,
 ): Promise<void> {
   const extraction = pipelineResult.extraction;
@@ -227,14 +306,9 @@ export async function reviewDesignTokens(
   const fontKeys = Object.keys(tokens.fonts).filter(
     (k) => tokens.fonts[k as keyof typeof tokens.fonts] !== undefined,
   );
-  const spacing = tokens.spacing;
 
   console.log(chalk.bold.cyan('\n╭── Design Token Review ──╮'));
-  console.log(
-    chalk.gray(
-      `  ${colorKeys.length} colors · ${fontKeys.length} fonts · spacing detected`,
-    ),
-  );
+  console.log(chalk.gray(`  ${colorKeys.length} colors · ${fontKeys.length} fonts · spacing detected`));
 
   if (colorKeys.length > 0) {
     console.log(chalk.white('\n  Colors:'));
@@ -256,52 +330,82 @@ export async function reviewDesignTokens(
     }
   }
 
-  console.log(
-    chalk.gray(
-      `\n  Spacing: section-padding=${spacing.sectionPadding}px, container-width=${spacing.containerWidth}px`,
-    ),
-  );
-  console.log(chalk.gray('  (Token sync runs in Stage 4 with --sync-to-mcp)'));
   console.log('');
 }
 
-/**
- * Post-classification review: show detected sections.
- * Called after Stage 2 (classify) completes, if running interactively.
- */
-export async function reviewSections(
-  _wizardOpts: WizardOptions,
+/** Interactive section review — prompts user to approve/reject detected sections. */
+async function reviewSectionsFromResult(
+  state: CloneState,
+  interactive: boolean,
   pipelineResult: PipelineResult,
-): Promise<void> {
+): Promise<string[]> {
   const classification = pipelineResult.classification;
   if (!classification?.specs || classification.specs.length === 0) {
     console.log(chalk.gray('  No sections detected — skipping review.'));
-    return;
+    return [];
   }
+
+  const specs = classification.specs;
+  const sectionChoices: SectionChoice[] = specs.map((s) => ({
+    id: s.section_id,
+    label: `${s.section_id} [${s.source.selector}]`,
+    preview: `y:${s.source.y_range[0]}-${s.source.y_range[1]}`,
+  }));
 
   console.log(chalk.bold.cyan('\n╭── Section Review ──╮'));
-  console.log(chalk.gray(`  ${classification.specs.length} sections classified:`));
-  console.log('');
+  console.log(chalk.gray(`  ${sectionChoices.length} sections detected`));
 
-  for (const spec of classification.specs.slice(0, 15)) {
-    const id = spec.section_id ?? '?';
-    const selector = spec.source?.selector ?? id;
-    console.log(chalk.gray(`  [${id}] ${selector}`));
+  let approved: string[];
+
+  if (interactive) {
+    console.log('');
+    const autoPick = await promptAutoPick();
+    if (autoPick) {
+      approved = sectionChoices.map((s) => s.id);
+      console.log(chalk.green(`  ✓ Auto-approved all ${approved.length} sections`));
+    } else {
+      approved = await promptSections(sectionChoices);
+      if (approved.length === 0) {
+        console.log(chalk.yellow('  ⚠ No sections selected — build will produce an empty page'));
+      } else {
+        console.log(chalk.green(`  ✓ ${approved.length}/${sectionChoices.length} sections approved`));
+      }
+    }
+  } else {
+    approved = sectionChoices.map((s) => s.id);
+    console.log(chalk.gray(`  (non-interactive — approving all ${approved.length} sections)`));
   }
 
-  if (classification.specs.length > 15) {
-    console.log(chalk.gray(`  ... and ${classification.specs.length - 15} more`));
+  // Save approved sections to state
+  const approvedSet = new Set(approved);
+  for (const section of sectionChoices) {
+    approveSection(state, section.id, approvedSet.has(section.id));
   }
+  const stateFile = stateFileFor(state.outputDir, state.hostname);
+  await saveState(stateFile, state);
 
-  console.log(
-    chalk.gray(
-      `\n  Approved: ${classification.selectedManifest?.approved_count ?? classification.specs.length}`,
-    ),
-  );
-  console.log(
-    chalk.gray(
-      `  Skipped:  ${classification.selectedManifest?.skipped_count ?? 0}`,
-    ),
-  );
+  const rejected = sectionChoices.filter((s) => !approvedSet.has(s.id));
+  if (rejected.length > 0) {
+    console.log(chalk.gray(`  Skipped: ${rejected.map((s) => s.id).join(', ')}`));
+  }
   console.log('');
+
+  return approved;
+}
+
+// ── Public exports for external callers (clone-v3.ts post-pipeline review) ──
+
+export async function reviewDesignTokens(
+  _wizardOpts: WizardOptions,
+  pipelineResult: PipelineResult,
+): Promise<void> {
+  await reviewDesignTokensFromResult(pipelineResult);
+}
+
+export async function reviewSections(
+  state: CloneState,
+  wizardOpts: WizardOptions,
+  pipelineResult: PipelineResult,
+): Promise<string[]> {
+  return reviewSectionsFromResult(state, wizardOpts.interactive, pipelineResult);
 }

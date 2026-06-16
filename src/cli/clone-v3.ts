@@ -23,7 +23,7 @@ import path from 'node:path';
 import { PACKAGE_VERSION } from '../lib/version.js';
 import { runWizard, type WizardOptions } from './wizard.js';
 import type { AnimationStrategy, FontStrategy, StrictnessLevel } from './prompts.js';
-import { runWizardPipeline, reviewDesignTokens, reviewSections } from './pipeline-runner.js';
+import { runWizardPipeline } from './pipeline-runner.js';
 import { runDryRun, formatDryRunReport } from './dry-run.js';
 import { runDiffOnly, formatDiffReport, saveSnapshots, snapshotSections } from './diff-only.js';
 import { runIncremental, formatIncrementalReport } from './incremental.js';
@@ -106,13 +106,11 @@ program
         process.exit(0);
       }
 
-      // ── Phase 9: Run the full pipeline with state tracking ──
+      // ── Phase 9: Run pipeline with step-by-step wizard (reviews between stages) ──
       const runResult = await runWizardPipeline(result);
 
-      // Post-extraction review (interactive mode only)
-      if (wizardOpts.interactive && runResult.pipelineResult) {
-        await reviewDesignTokens(wizardOpts, runResult.pipelineResult);
-        await reviewSections(wizardOpts, runResult.pipelineResult);
+      if (runResult.approvedSectionIds?.length) {
+        console.log(chalk.gray(`  Sections approved: ${runResult.approvedSectionIds.length}`));
       }
 
       console.log(chalk.green(`\n✓ Clone complete: ${result.state.hostname}`));

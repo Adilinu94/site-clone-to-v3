@@ -58,6 +58,10 @@ export interface PipelineOptions extends ExtractionOptions {
   mcpUrl?: string;
   mcpAuth?: string;
   skipStages?: number[];
+  /** Pre-loaded extraction result — used when Stage 1 is skipped (step-by-step mode). */
+  preloadedExtraction?: ExtractionResult;
+  /** Pre-loaded classification result — used when Stage 2 is skipped (step-by-step mode). */
+  preloadedClassification?: ClassifyAllResult;
 }
 
 export type StageName = 'extract' | 'classify' | 'assets' | 'tokens' | 'build' | 'animations';
@@ -131,6 +135,16 @@ export async function runPipeline(
         hasComputedStyles: !!result.computedStyles,
       },
     });
+  } else if (options.preloadedExtraction) {
+    // Step-by-step mode: reuse extraction from previous pipeline run
+    extraction = options.preloadedExtraction;
+    stages.push({
+      name: 'extract',
+      status: 'skipped',
+      durationMs: 0,
+      outputPaths: [],
+      summary: { reason: 'reused from step-by-step phase 1' },
+    });
   }
 
   // Stage 2: classify
@@ -161,6 +175,16 @@ export async function runPipeline(
         approved: result.selectedManifest.approved_count,
         skipped: result.selectedManifest.skipped_count,
       },
+    });
+  } else if (options.preloadedClassification) {
+    // Step-by-step mode: reuse classification from previous pipeline run
+    classification = options.preloadedClassification;
+    stages.push({
+      name: 'classify',
+      status: 'skipped',
+      durationMs: 0,
+      outputPaths: [],
+      summary: { reason: 'reused from step-by-step phase 1' },
     });
   }
 
