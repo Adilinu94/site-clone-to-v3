@@ -1,8 +1,8 @@
 # SITE-CLONE-TO-V3 — Handoff für nächste Session
 
-> **Stand:** 2026-06-16, 19:15 — Phasen 0-8 abgeschlossen
-> **Letzter verifizierter Commit auf `main`:** `c787ed0` (Phase 8)
-> **Tests:** 375/375 grün, TS-clean (0 errors)
+> **Stand:** 2026-06-16, 19:30 — Phasen 0-9A abgeschlossen
+> **Letzter verifizierter Commit auf `main`:** `4b556e6` (Phase 9A)
+> **Tests:** 400/400 grün, TS-clean (0 errors)
 
 ## TL;DR
 
@@ -186,8 +186,69 @@ Default-Fixer sind **placeholders** (return `ok: false`). Sie dokumentieren nur,
 
 ## Nächste sinnvolle Schritte (Reihenfolge)
 
-1. **Phase 9 — Wizard-Integration** (interaktive CLI mit Inquirer, 2 Tage)
+1. **Phase 9B — Dry-Run + Diff-Only + Incremental-Build** (Build-Modi, 1.5 Tage)
 2. **Asset-Stage-Pipeline-Integration** (Lücke aus 375d2a5 fixen, 0.5 Tage)
 3. **Phase 10 — Tests** (E2E gegen echte WP-Targets, 2.5 Tage)
 4. **Phase 11 — Docs + npm-Publish** (2 Tage)
 5. **Real-Fixer implementieren** (Phase 8 hat nur Placeholder-Fixer; die echten MCP-Calls für color/font/layout/image-fix müssen in Phase 9+ kommen)
+
+## Phase-9A-Details (NEU — Wizard-Integration Teil 1)
+
+### Was Phase 9A liefert
+
+- **`src/cli/state-manager.ts`** (177 LoC) — `CloneState` v1-Schema mit 8 Phasen (`extract`, `tokens`, `classify`, `assets`, `design-system`, `build`, `qa`, `auto-fix`), Resume via `state.json` in `research/<hostname>/`, `reconcile()` findet nächste offene Phase, Section-Approval-List mit Hashes.
+- **`src/cli/prompts.ts`** (162 LoC) — Wiederverwendbare `@inquirer/prompts`-Wrapper mit Validation: `promptUrl` (URL-Pattern + URL-Parse), `promptTarget` (Select aus vorhandenen Profiles), `promptViewports` (320–3840 Range), `promptAnimation`/`promptFonts`/`promptStrictness` (Select mit Description), `promptSections` (Checkbox mit `pageSize: 15`), `promptAutoPick`/`promptResume`/`promptPostId`. Plus `summaryFor()` für die finale Plan-Zusammenfassung.
+- **`src/cli/wizard.ts`** (175 LoC) — 7-Step-Wizard-Orchestrator (`runWizard`): URL → Target → Viewports → Animations → Fonts → Strictness → Sections. Resume-Detection bei vorhandener `state.json`, Dry-Run-Aware, Plan-Summary + User-Confirmation.
+- **`src/cli/clone-v3.ts`** wired — `clone` Subcommand ruft `runWizard()` mit allen BAUPLAN §3 Flags (`--url`, `--target`, `--viewports`, `--animations`, `--fonts`, `--strictness`, `--auto-pick-sections`, `--sections`, `--source-auth`, `--no-wizard`, `--resume`, `--output`, `--dry-run`, `--diff-only`).
+
+### 7 Wizard-Steps (BAUPLAN §3)
+
+1. **URL-Eingabe** — `https://example.com` mit `URL_PATTERN`-Validation
+2. **Target-Auswahl** — Select aus `~/.clone-v3/profiles.json` (oder freie Eingabe)
+3. **Viewports** — `1440,768,390` default, custom comma-separated
+4. **Animation-Strategy** — `none|css|gsap|auto` mit Description
+5. **Font-Strategy** — `auto|system|all`
+6. **Strictness** — `draft|balanced|pixel-perfect` (70/85/95% Targets)
+7. **Section-Picker** — Multi-Select mit Auto-Pick-Confirm, oder Skip wenn `--auto-pick-sections`
+
+### CLI-Beispiele (verifiziert)
+
+```bash
+# Non-interactive (CI/CD)
+npx tsx src/cli/clone-v3.ts clone --no-wizard --url https://example.com --target solar-local --strictness pixel-perfect
+
+# Interactive mit Plan-Confirmation
+npx tsx src/cli/clone-v3.ts clone
+
+# Resume
+npx tsx src/cli/clone-v3.ts clone --resume research/example.com/state.json
+
+# Custom output dir
+npx tsx src/cli/clone-v3.ts clone --no-wizard --url https://example.com --output ./my-clone
+```
+
+### Honesty-Discipline (PFLICHT — aufgedeckt + gefixt)
+
+- **TypeScript-Fehler**: `tsc` flaggte `'options' is declared but its value is never read` in `extract`-Action → mit `_options` prefix als "intentionally unused" markiert.
+- **`@inquirer/prompts` v12**: `number()` returnt `number | undefined` — explizit abgefangen mit `if (result === undefined) throw new Error(...)`.
+
+### Tests (Phase 9A: 25/25 grün)
+
+- `tests/unit/state-manager.test.ts` — 18 Tests (createInitialState, save/load round-trip, schema-version-reject, phase-backfill, transitions, reconcile, section-approval, isPhaseDone)
+- `tests/unit/prompts.test.ts` — 7 Tests (isValidUrl valid/invalid, description-maps, summaryFor format)
+
+### Datei-Stand (2026-06-16, 19:30)
+
+**Neu (10 files, 981 LoC):**
+```
+src/cli/prompts.ts              162 LoC
+src/cli/state-manager.ts        177 LoC
+src/cli/wizard.ts               175 LoC
+src/cli/clone-v3.ts             +60 LoC (clone command rewired)
+src/lib/paths.ts                +5 LoC (hostnameFromUrl)
+src/cli/clone.ts                +9 LoC (stage 6 added)
+src/analysis/pipeline.ts        +85 LoC (asset stage)
+src/analysis/token-mapping.ts   -3 LoC (cleanup)
+tests/unit/prompts.test.ts      53 LoC
+tests/unit/state-manager.test.ts  176 LoC
+```
