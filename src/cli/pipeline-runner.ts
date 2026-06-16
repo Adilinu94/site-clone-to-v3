@@ -42,7 +42,7 @@ const STAGE_TO_PHASE: Record<StageName, PhaseName> = {
   assets: 'assets',
   tokens: 'tokens',
   build: 'build',
-  animations: 'auto-fix',
+  animations: 'animations',
 };
 
 const PHASE_LABELS: Record<PhaseName, string> = {
@@ -53,7 +53,7 @@ const PHASE_LABELS: Record<PhaseName, string> = {
   'design-system': 'Design System',
   build: 'Build (V3 + V4)',
   qa: 'QA (Visual Diff)',
-  'auto-fix': 'Animations (WPCode)',
+  'animations': 'Animations (WPCode)',
 };
 
 export interface PipelineRunOptions extends WizardOptions {

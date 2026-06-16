@@ -10,7 +10,7 @@ export type PhaseName =
   | 'design-system'
   | 'build'
   | 'qa'
-  | 'auto-fix';
+  | 'animations';
 
 export type PhaseStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
 
@@ -54,7 +54,7 @@ const PHASE_ORDER: PhaseName[] = [
   'design-system',
   'build',
   'qa',
-  'auto-fix',
+  'animations',
 ];
 
 export function emptyPhaseState(): PhaseState {
@@ -148,7 +148,7 @@ export function reconcile(state: CloneState): PhaseName {
       return phase;
     }
   }
-  return 'auto-fix';
+  return 'animations';
 }
 
 export function approveSection(

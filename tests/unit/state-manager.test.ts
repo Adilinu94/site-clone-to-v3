@@ -44,7 +44,7 @@ describe('state-manager', () => {
   describe('createInitialState', () => {
     it('initializes all phases as pending', () => {
       const state = createInitialState('https://example.com', './research', fixtureOptions());
-      const phases = ['extract', 'tokens', 'classify', 'assets', 'design-system', 'build', 'qa', 'auto-fix'] as const;
+      const phases = ['extract', 'tokens', 'classify', 'assets', 'design-system', 'build', 'qa', 'animations'] as const;
       for (const p of phases) {
         expect(state.phases[p].status).toBe('pending');
       }
@@ -139,10 +139,10 @@ describe('state-manager', () => {
 
     it('returns last phase when all complete', () => {
       const state = createInitialState('https://x.io', tmpDir, fixtureOptions());
-      for (const p of ['extract', 'tokens', 'classify', 'assets', 'design-system', 'build', 'qa', 'auto-fix'] as const) {
+      for (const p of ['extract', 'tokens', 'classify', 'assets', 'design-system', 'build', 'qa', 'animations'] as const) {
         markCompleted(state, p);
       }
-      expect(reconcile(state)).toBe('auto-fix');
+      expect(reconcile(state)).toBe('animations');
     });
   });
 
