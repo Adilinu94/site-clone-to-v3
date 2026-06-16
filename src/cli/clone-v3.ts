@@ -67,6 +67,7 @@ program
   .option('--dry-run', 'Generate specs only, no MCP calls', false)
   .option('--diff-only', 'Compare against existing V3 page, do not build', false)
   .option('--incremental', 'Only rebuild changed sections (requires previous build)', false)
+  .option('--clone-url <url>', 'Deployed clone page URL for visual QA stage (e.g. https://solar.local/?p=1234)')
   .action(async (url: string | undefined, options) => {
     console.log(chalk.cyan(`[clone-v3 v${PACKAGE_VERSION}] full pipeline`));
     try {
@@ -86,6 +87,7 @@ program
         resume: options.resume,
         output: options.output ?? './research',
         interactive: options.wizard !== false,
+        cloneUrl: options.cloneUrl,
       };
       const result = await runWizard(wizardOpts);
       const researchDir = `${wizardOpts.output}/${result.state.hostname}`;

@@ -1,8 +1,9 @@
 # SITE-CLONE-TO-V3 — Handoff für nächste Session
 
-> **Stand:** 2026-06-16, 19:35 — Phasen 0-9B abgeschlossen
-> **Letzter verifizierter Commit auf `main`:** `6996941` (Phase 9B)
-> **Tests:** 454/454 grün, TS-clean (0 errors)
+> **Stand:** 2026-06-16, 22:00 — Phasen 0-11 abgeschlossen
+> **Letzter verifizierter Commit auf `main`:** `7abaf8a` (Phase 10B+E e2e tests)
+> **Tests:** 534/534 grün, TS-clean (0 errors)
+> **Commits seit `origin/main`:** 17 ahead, PR-bereit
 
 ## TL;DR
 

@@ -43,6 +43,8 @@ export interface CloneState {
     animations: 'none' | 'css' | 'gsap' | 'auto';
     fonts: 'auto' | 'system' | 'all';
     strictness: 'draft' | 'balanced' | 'pixel-perfect';
+    /** Deployed clone page URL for QA stage (e.g. https://solar.local/?p=1234). */
+    cloneUrl?: string;
   };
 }
 

@@ -9,7 +9,7 @@
  *
  * Step-by-step mode (BAUPLAN 9-step wizard):
  *   Phase 1: stages 1-2 (extract + classify) → design-token review → section review
- *   Phase 2: stages 3-6 (assets + tokens + build + animations) with approved sections
+ *   Phase 2: stages 3-7 (assets + tokens + build + animations + qa) with approved sections
  *
  * Used by the `clone` command in clone-v3.ts after the wizard gathers config.
  */
@@ -43,6 +43,7 @@ const STAGE_TO_PHASE: Record<StageName, PhaseName> = {
   tokens: 'tokens',
   build: 'build',
   animations: 'animations',
+  qa: 'qa',
 };
 
 const PHASE_LABELS: Record<PhaseName, string> = {
@@ -85,7 +86,7 @@ export interface PipelineRunResult {
 export async function runWizardPipeline(
   wizardResult: WizardResult,
 ): Promise<PipelineRunResult> {
-  const { state, resumeMode, interactive } = wizardResult;
+  const { state, resumeMode, interactive, cloneUrl } = wizardResult;
   const stateFile = stateFileFor(state.outputDir, state.hostname);
   const outputDir = `${state.outputDir}/${state.hostname}`;
 
@@ -108,15 +109,15 @@ export async function runWizardPipeline(
 
   if (resumeMode || !interactive) {
     // Resume or non-interactive: run all remaining stages in one shot
-    return runPhase(state, stateFile, outputDir, skipStages);
+    return runPhase(state, stateFile, outputDir, skipStages, cloneUrl);
   }
 
   // ─────────────── Interactive: two-phase step-by-step ───────────────
 
   // Phase 1: Extract + Classify (stages 1-2)
   console.log(chalk.bold.magenta('╭── Phase 1 of 2: Extract + Classify ──╮\n'));
-  const phase1Skip = new Set([...skipStages, 3, 4, 5, 6]);
-  const phase1 = await runPhase(state, stateFile, outputDir, phase1Skip);
+  const phase1Skip = new Set([...skipStages, 3, 4, 5, 6, 7]);
+  const phase1 = await runPhase(state, stateFile, outputDir, phase1Skip, cloneUrl);
   const phase1Result = phase1.pipelineResult;
 
   if (!phase1Result?.extraction) {
@@ -130,8 +131,8 @@ export async function runWizardPipeline(
   // ── Section Review (BAUPLAN Steps 8-9) ──
   const approvedIds = await reviewSectionsFromResult(state, phase1Result);
 
-  // ─────────────── Phase 2: Remaining stages (3-6) ───────────────
-  console.log(chalk.bold.magenta('\n╭── Phase 2 of 2: Assets + Tokens + Build + Animations ──╮\n'));
+  // ─────────────── Phase 2: Remaining stages (3-7) ───────────────
+  console.log(chalk.bold.magenta('\n╭── Phase 2 of 2: Assets + Tokens + Build + Animations + QA ──╮\n'));
 
   // Filter classification specs to only approved sections
   const phase1Classification = phase1Result.classification as ClassifyAllResult | undefined;
@@ -153,6 +154,7 @@ export async function runWizardPipeline(
     skipStages: [...phase2Skip],
     preloadedExtraction: phase1Result.extraction,
     preloadedClassification: filteredClassification,
+    cloneUrl: cloneUrl ?? state.options.cloneUrl,
   });
 
   // Update state from phase 2 stages
@@ -186,6 +188,7 @@ function computeResumeSkips(state: CloneState, resumeMode: boolean): Set<number>
     tokens: 4,
     build: 5,
     animations: 6,
+    qa: 7,
   };
 
   const skipStages = new Set<number>();
@@ -208,6 +211,7 @@ async function runPhase(
   stateFile: string,
   outputDir: string,
   skipStages: Set<number>,
+  cloneUrl?: string,
 ): Promise<PipelineRunResult> {
   let pipelineResult: PipelineResult;
   try {
@@ -217,6 +221,7 @@ async function runPhase(
       dryRun: false,
       syncToMcp: !!state.options.target,
       skipStages: skipStages.size > 0 ? [...skipStages] : undefined,
+      cloneUrl: cloneUrl ?? state.options.cloneUrl,
     });
   } catch (err) {
     console.error(chalk.red(`\n✗ Pipeline failed: ${err instanceof Error ? err.message : err}`));

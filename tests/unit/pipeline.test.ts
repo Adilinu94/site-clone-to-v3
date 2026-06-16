@@ -117,10 +117,10 @@ describe('pipeline', () => {
     const opts = { ...baseOptions, outputDir: tmp };
     const result = await runPipeline('https://example.com', opts);
 
-    // Default flow: extract, classify, assets, build, animations (tokens only if syncToMcp)
-    expect(result.stages).toHaveLength(5);
+    // Default flow: extract, classify, assets, build, animations, qa (tokens only if syncToMcp, qa skipped without cloneUrl)
+    expect(result.stages).toHaveLength(6);
     expect(result.stages.map((s) => s.name)).toEqual<StageName[]>([
-      'extract', 'classify', 'assets', 'build', 'animations',
+      'extract', 'classify', 'assets', 'build', 'animations', 'qa',
     ]);
 
     // Verify all 4 sub-dirs were created

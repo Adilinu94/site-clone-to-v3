@@ -1,13 +1,14 @@
 /**
  * Pipeline orchestrator (Phase 4 + 5 + 6 + 7).
  *
- * 6-Stage-Pipeline:
+ * 7-Stage-Pipeline:
  *   Stage 1 (extract): Playwright → ExtractionResult + JSON-Outputs
  *   Stage 2 (classify): Section-Picker → SectionSpec[] + Manifest
  *   Stage 3 (assets): Downloads all 4 asset types (images, fonts, SVGs, favicons) → manifest.json
  *   Stage 4 (tokens, optional): Design-Token-Sync via MCP
  *   Stage 5 (build): V3 + V4 page-data writers
  *   Stage 6 (animations, Phase 7): WPCode-Snippet-Plan aus Animations
+ *   Stage 7 (qa, Phase 8): Visual QA via pixel-diff + SSIM (optional, requires cloneUrl)
  *
  * The asset-downloader is now integrated as Stage 3.
  * Images, SVGs, and favicons are collected by the extractor
@@ -50,6 +51,9 @@ import {
   buildAndWriteManifest,
   type AssetManifest,
 } from '../scraper/manifest-builder.js';
+import {
+  runAcceptance,
+} from '../qa/acceptance.js';
 
 export interface PipelineOptions extends ExtractionOptions {
   outputDir: string;
@@ -62,9 +66,13 @@ export interface PipelineOptions extends ExtractionOptions {
   preloadedExtraction?: ExtractionResult;
   /** Pre-loaded classification result — used when Stage 2 is skipped (step-by-step mode). */
   preloadedClassification?: ClassifyAllResult;
+  /** Clone URL for QA stage (the deployed page to compare against original). */
+  cloneUrl?: string;
+  /** Minimum acceptable match score for QA acceptance (0–1, default 0.85). */
+  qaMinScore?: number;
 }
 
-export type StageName = 'extract' | 'classify' | 'assets' | 'tokens' | 'build' | 'animations';
+export type StageName = 'extract' | 'classify' | 'assets' | 'tokens' | 'build' | 'animations' | 'qa';
 
 export interface StageResult {
   name: StageName;
@@ -375,6 +383,47 @@ export async function runPipeline(
         sectionTargets: result.sectionTargets.length,
         hasAnimations: result.hasAnimations,
       },
+    });
+  }
+
+  // Stage 7: qa (Phase 8) — Visual QA via pixel-diff + SSIM
+  if (!skip.has(7) && options.cloneUrl) {
+    const { result, ms } = await time(async () => {
+      const qaOutputDir = path.join(outputDir, 'qa');
+      const report = await runAcceptance({
+        originalUrl: url,
+        cloneUrl: options.cloneUrl!,
+        outputDir: qaOutputDir,
+        minAcceptableScore: options.qaMinScore,
+      });
+      return report;
+    });
+    const qaReport = result;
+    artifacts['qa-report'] = path.join(outputDir, 'qa', 'acceptance-report.json');
+    stages.push({
+      name: 'qa',
+      status: qaReport.verdict === 'fail' ? 'failed' : 'ok',
+      durationMs: ms,
+      outputPaths: [
+        path.join(outputDir, 'qa', 'acceptance-report.json'),
+        path.join(outputDir, 'qa', 'original.png'),
+        path.join(outputDir, 'qa', 'clone.png'),
+        path.join(outputDir, 'qa', 'diff.png'),
+      ],
+      summary: {
+        verdict: qaReport.verdict,
+        matchPercent: qaReport.matchPercent,
+        score: qaReport.score,
+        recommendations: qaReport.recommendations,
+      },
+    });
+  } else if (!skip.has(7)) {
+    stages.push({
+      name: 'qa',
+      status: 'skipped',
+      durationMs: 0,
+      outputPaths: [],
+      summary: { reason: 'no clone URL provided — QA requires a deployed page to compare' },
     });
   }
 

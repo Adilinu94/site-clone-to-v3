@@ -92,7 +92,6 @@ function cropPng(png: PNG, x: number, y: number, w: number, h: number): PNG {
 
 export function classifySsim(percent: number): 'near-identical' | 'similar' | 'different' | 'mismatch' {
   if (percent >= 95) return 'near-identical';
-  if (percent >= 95) return 'near-identical';
   if (percent >= 85) return 'similar';
   if (percent >= 70) return 'different';
   return 'mismatch';

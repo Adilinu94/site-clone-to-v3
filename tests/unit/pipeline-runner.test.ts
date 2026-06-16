@@ -133,7 +133,7 @@ beforeEach(() => {
 // ═══════════════════════════════════════════════════════════
 
 describe('runWizardPipeline — interactive mode', () => {
-  it('runs phase 1 (stages 1-2) then phase 2 (stages 3-6)', async () => {
+  it('runs phase 1 (stages 1-2) then phase 2 (stages 3-7)', async () => {
     // Phase 1 returns extraction + classification
     const extraction = makeExtraction();
     extraction.sections = [makeSectionInfo('hero'), makeSectionInfo('features'), makeSectionInfo('footer')];
@@ -146,12 +146,13 @@ describe('runWizardPipeline — interactive mode', () => {
       { extraction, classification },
     );
 
-    // Phase 2 returns assets + tokens + build + animations
+    // Phase 2 returns assets + tokens + build + animations + qa
     const phase2Result = makePipelineResult([
       okStage('assets'),
       skippedStage('tokens'),
       okStage('build'),
       okStage('animations'),
+      skippedStage('qa'),
     ]);
 
     // Mock: first call = phase 1, second call = phase 2
@@ -168,9 +169,9 @@ describe('runWizardPipeline — interactive mode', () => {
     // Verify two calls to runPipeline
     expect(mockRunPipeline).toHaveBeenCalledTimes(2);
 
-    // Phase 1 call: skipStages = [3,4,5,6]
+    // Phase 1 call: skipStages = [3,4,5,6,7]
     const phase1Call = mockRunPipeline.mock.calls[0][1];
-    expect(phase1Call.skipStages).toEqual([3, 4, 5, 6]);
+    expect(phase1Call.skipStages).toEqual([3, 4, 5, 6, 7]);
     expect(phase1Call.preloadedExtraction).toBeUndefined();
 
     // Phase 2 call: skipStages = [1,2], has preloaded data
@@ -179,8 +180,8 @@ describe('runWizardPipeline — interactive mode', () => {
     expect(phase2Call.preloadedExtraction).toBe(extraction);
     expect(phase2Call.preloadedClassification).toBeDefined();
 
-    // Result has merged stages (6 total: 2 from phase 1 + 4 from phase 2)
-    expect(result.pipelineResult?.stages).toHaveLength(6);
+    // Result has merged stages (7 total: 2 from phase 1 + 5 from phase 2)
+    expect(result.pipelineResult?.stages).toHaveLength(7);
     expect(result.pipelineResult?.extraction).toBe(extraction);
     expect(result.pipelineResult?.classification).toBe(classification);
 
@@ -350,7 +351,7 @@ describe('runWizardPipeline — non-interactive mode', () => {
   it('runs all stages in one shot', async () => {
     const result = makePipelineResult([
       okStage('extract'), okStage('classify'), okStage('assets'),
-      okStage('tokens'), okStage('build'), okStage('animations'),
+      okStage('tokens'), okStage('build'), okStage('animations'), skippedStage('qa'),
     ]);
     mockRunPipeline.mockResolvedValueOnce(result);
 
@@ -358,11 +359,11 @@ describe('runWizardPipeline — non-interactive mode', () => {
     const output = await runWizardPipeline(wizardResult);
 
     expect(mockRunPipeline).toHaveBeenCalledTimes(1);
-    // No skipStages (runs all 6)
+    // No skipStages (runs all 7)
     const call = mockRunPipeline.mock.calls[0][1];
     expect(call.skipStages).toBeUndefined();
 
-    expect(output.pipelineResult?.stages).toHaveLength(6);
+    expect(output.pipelineResult?.stages).toHaveLength(7);
     expect(output.approvedSectionIds).toBeUndefined();
   });
 

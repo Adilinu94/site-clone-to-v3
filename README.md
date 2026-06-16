@@ -5,7 +5,7 @@
 [![Status](https://img.shields.io/badge/status-alpha-orange)]()
 [![License](https://img.shields.io/badge/license-MIT-blue)]()
 [![Node](https://img.shields.io/badge/node-%E2%89%A518-green)]()
-[![Tests](https://img.shields.io/badge/tests-526%20passing-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-534%20passing-brightgreen)]()
 
 ---
 
@@ -120,7 +120,7 @@ Short version:
 
 ## Status
 
-**Alpha — v0.1.0.** 13-phase plan mostly complete. 526/526 unit tests passing. 80% coverage on `src/`.
+**Beta — v0.1.0.** 12-phase plan complete. 534/534 unit tests passing, 0 TypeScript errors.
 
 What's working:
 - Playwright extraction (SPA hydration, lazy-scroll, computed styles, @keyframes, design tokens)
@@ -136,7 +136,6 @@ What's working:
 
 What's still in progress:
 - Live E2E against multiple WP targets (requires running Novamira plugin)
-- 1-2 of the strictness profiles may need tuning with real screenshots
 - Performance optimization for very large pages (>50 sections)
 
 ## License

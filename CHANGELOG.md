@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0] - 2026-06-16
 
 ### Features
+- **phase 11**: docs finalization + npm package prep — README, ARCHITECTURE.md, package.json
+- **pipeline**: cloneUrl wired through wizard→pipeline for QA stage + `--clone-url` CLI flag
+- **pipeline**: qa stage (Stage 7) integrated — runs runAcceptance() via Playwright capture + pixelmatch + SSIM
 - **pipeline**: filter classification to approved sections only (`04ed6ff`)
 - **pipeline**: step-by-step interactive mode with preloaded state (`934d5d8`)
 - **phase 9B**: dry-run + diff-only + incremental build modes (`6996941`)
@@ -26,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Bug Fixes
 - **state**: rename 'auto-fix' phase to 'animations' (correct PhaseName) (`8373d0b`)
+- **ssim**: fix duplicate `classifySsim()` ≥95 return bug (second branch unreachable)
 - **clone-v3**: update review*() calls to new 2-param signature (`5152743`)
 - **pipeline-runner**: remove unused imports + prefix unused params (`0169c26`)
 - **pipeline+extractor**: asset stage parallel + Array.from NodeList (`97c13bc`)
@@ -41,7 +45,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - HANDOFF.md for next session (phase 7+ handoff) (`d1e37f9`)
 
 ### Tests
+- **phase 10**: E2E tests (8 CLI-E2E + 5 live-E2E against test4) + 13 pipeline-runner unit tests
 - **phase 10**: coverage backlog + snapshot regression (`461a3b7`)
+- **phase 9**: 54 new tests (dry-run, diff-only, incremental + collect-assets)
 
 ### Chores
 - **extractor**: re-export DiscoveredImage/Svg/Favicon types (`b4c24df`)

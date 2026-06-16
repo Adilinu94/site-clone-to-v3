@@ -193,11 +193,11 @@ interface CloneState {
 
 ## Strictness Profiles
 
-| Profile | Pixel-Match Target | SSIM Target | Max Rounds | Use Case |
-|---|---|---|---|---|
-| `draft` | 70% | 0.7 | 2 | Quick prototype |
-| `balanced` | 85% | 0.85 | 3 | Production clone (default) |
-| `pixel-perfect` | 95% | 0.95 | 5 | Marketing site, brand-critical |
+| Profile | Pixel-Match Target | SSIM Target | Max Rounds | Max Fixes/Round | Severities | Use Case |
+|---|---|---|---|---|---|---|
+| `draft` | 70% | 0.7 | 1 | 3 | high | Quick prototype |
+| `balanced` | 85% | 0.85 | 2 | 5 | high + medium | Production clone (default) |
+| `pixel-perfect` | 95% | 0.95 | 3 | 20 | all | Marketing site, brand-critical |
 
 ## MCP Adapter
 
