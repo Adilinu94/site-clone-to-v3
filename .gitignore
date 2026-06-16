@@ -36,6 +36,7 @@ assets/
 tmp/
 *.tmp
 pipeline-outputs/
+.tmp-e2e/
 
 # IDE
 .vscode/
