@@ -103,7 +103,7 @@ async function extractCssVariables(page: Page): Promise<Record<string, string>> 
 
 /** Collect images, SVGs, and favicon/OG data from the live DOM.
  *  Runs after hydration + lazy-scroll so all dynamic content is present. */
-async function collectAssets(page: Page): Promise<{
+export async function collectAssets(page: Page): Promise<{
   images: DiscoveredImage[];
   svgs: DiscoveredSvg[];
   favicons: DiscoveredFavicon[];

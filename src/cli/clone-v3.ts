@@ -18,10 +18,16 @@
  */
 import { Command } from 'commander';
 import chalk from 'chalk';
+import path from 'node:path';
 
 import { PACKAGE_VERSION } from '../lib/version.js';
 import { runWizard, type WizardOptions } from './wizard.js';
 import type { AnimationStrategy, FontStrategy, StrictnessLevel } from './prompts.js';
+import { runWizardPipeline, reviewDesignTokens, reviewSections } from './pipeline-runner.js';
+import { runDryRun, formatDryRunReport } from './dry-run.js';
+import { runDiffOnly, formatDiffReport, saveSnapshots, snapshotSections } from './diff-only.js';
+import { runIncremental, formatIncrementalReport } from './incremental.js';
+import { hostnameFromUrl } from '../lib/paths.js';
 
 const program = new Command();
 
@@ -47,6 +53,7 @@ program
   .option('-o, --output <dir>', 'Research output directory', './research')
   .option('--dry-run', 'Generate specs only, no MCP calls', false)
   .option('--diff-only', 'Compare against existing V3 page, do not build', false)
+  .option('--incremental', 'Only rebuild changed sections (requires previous build)', false)
   .action(async (url: string | undefined, options) => {
     console.log(chalk.cyan(`[clone-v3 v${PACKAGE_VERSION}] full pipeline`));
     try {
@@ -68,13 +75,51 @@ program
         interactive: options.wizard !== false,
       };
       const result = await runWizard(wizardOpts);
+      const researchDir = `${wizardOpts.output}/${result.state.hostname}`;
       console.log(chalk.cyan(`\n[clone-v3] State saved to ${wizardOpts.resume ?? `research/${result.state.hostname}/state.json`}`));
-      console.log(chalk.gray('Full pipeline execution is wired up in Phase 9B (dry-run/diff/incremental).'));
-      if (options.dryRun) {
-        console.log(chalk.yellow('[dry-run] would generate specs without MCP calls'));
+
+      const sourceUrl = result.state.sourceUrl;
+      const modeCount = [options.dryRun, options.diffOnly, options.incremental].filter(Boolean).length;
+      if (modeCount > 1) {
+        console.error(chalk.red('Error: --dry-run, --diff-only, and --incremental are mutually exclusive.'));
+        process.exit(2);
       }
+
+      if (options.dryRun) {
+        console.log(chalk.yellow('[DRY-RUN] Generating specs without MCP calls...'));
+        const report = await runDryRun({ researchDir, url: sourceUrl });
+        console.log(chalk.cyan(formatDryRunReport(report)));
+        process.exit(0);
+      }
+
+      if (options.diffOnly) {
+        console.log(chalk.yellow('[DIFF-ONLY] Comparing current extraction against previous build...'));
+        const report = await runDiffOnly({ researchDir, url: sourceUrl });
+        console.log(chalk.cyan(formatDiffReport(report)));
+        process.exit(0);
+      }
+
+      if (options.incremental) {
+        console.log(chalk.yellow('[INCREMENTAL] Computing change set vs previous build...'));
+        const report = await runIncremental({ researchDir, url: sourceUrl });
+        console.log(chalk.cyan(formatIncrementalReport(report)));
+        process.exit(0);
+      }
+
+      // ── Phase 9: Run the full pipeline with state tracking ──
+      const runResult = await runWizardPipeline(result);
+
+      // Post-extraction review (interactive mode only)
+      if (wizardOpts.interactive && runResult.pipelineResult) {
+        await reviewDesignTokens(result.state, wizardOpts, runResult.pipelineResult);
+        await reviewSections(result.state, wizardOpts, runResult.pipelineResult);
+      }
+
+      console.log(chalk.green(`\n✓ Clone complete: ${result.state.hostname}`));
+      console.log(chalk.gray(`  State saved → ${runResult.stateFile}`));
+      console.log(chalk.gray(`  Run 'clone-v3 diff --url ${sourceUrl}' to compare against previous builds.`));
     } catch (err) {
-      console.error(chalk.red('Wizard failed:'), err instanceof Error ? err.message : err);
+      console.error(chalk.red('Clone failed:'), err instanceof Error ? err.message : err);
       process.exit(1);
     }
   });
@@ -131,16 +176,34 @@ program
   });
 
 program
-  .command('diff <url>')
-  .description('Compare original vs existing V3 page without rebuilding')
-  .requiredOption('-t, --target <name>', 'WP target profile name')
-  .requiredOption('--post <id>', 'Existing WP post ID to compare against', parseInt)
-  .action(async (url, options) => {
+  .command('diff [url]')
+  .description('Compare source extraction vs previous build (no MCP, no Playwright)')
+  .option('-u, --url <url>', 'Source URL (or read from state.json)')
+  .option('-o, --output <dir>', 'Research output directory', './research')
+  .option('--save-snapshots', 'Save current extraction as new baseline (previous-sections.json)', false)
+  .action(async (url: string | undefined, options) => {
     console.log(chalk.cyan(`[clone-v3 v${PACKAGE_VERSION}] diff`));
-    console.log(chalk.gray(`URL:        ${url}`));
-    console.log(chalk.gray(`Target:     ${options.target}`));
-    console.log(chalk.gray(`Post:       ${options.post}`));
-    console.log(chalk.gray('Diff not yet implemented — see Phase 8'));
+    try {
+      const sourceUrl = options.url ?? url;
+      if (!sourceUrl) {
+        console.error(chalk.red('Error: URL required (--url or positional arg).'));
+        process.exit(2);
+      }
+      const hostname = hostnameFromUrl(sourceUrl);
+      const researchDir = path.join(options.output, hostname);
+      const report = await runDiffOnly({ researchDir, url: sourceUrl });
+      console.log(chalk.cyan(formatDiffReport(report)));
+      if (options.saveSnapshots) {
+        const { loadExtractionResult } = await import('./diff-only.js');
+        const extraction = await loadExtractionResult(researchDir);
+        const snapshots = snapshotSections(extraction);
+        const savedPath = await saveSnapshots(researchDir, snapshots);
+        console.log(chalk.green(`[diff] saved new baseline → ${savedPath}`));
+      }
+    } catch (err) {
+      console.error(chalk.red('Diff failed:'), err instanceof Error ? err.message : err);
+      process.exit(1);
+    }
   });
 
 program

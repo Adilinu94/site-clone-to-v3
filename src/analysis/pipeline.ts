@@ -4,7 +4,7 @@
  * 6-Stage-Pipeline:
  *   Stage 1 (extract): Playwright → ExtractionResult + JSON-Outputs
  *   Stage 2 (classify): Section-Picker → SectionSpec[] + Manifest
- *   Stage 3 (assets): Font-Downloader → manifest.json (fonts from extraction.fontsIntercepted)
+ *   Stage 3 (assets): Downloads all 4 asset types (images, fonts, SVGs, favicons) → manifest.json
  *   Stage 4 (tokens, optional): Design-Token-Sync via MCP
  *   Stage 5 (build): V3 + V4 page-data writers
  *   Stage 6 (animations, Phase 7): WPCode-Snippet-Plan aus Animations
