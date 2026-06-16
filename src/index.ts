@@ -6,3 +6,16 @@ export { v3Id } from './lib/v3-id.js';
 export { CLONE_V3_HOME, profilesPath, sourceAuthPath, researchPath } from './lib/paths.js';
 export { withRetry, type RetryOptions } from './lib/with-retry.js';
 export { PACKAGE_VERSION } from './lib/version.js';
+export {
+  createWPCodeAdapter,
+  type WPCodeAdapter,
+  type WPCodeCreateOptions,
+  type WPCodeType,
+  type WPCodeLocation,
+} from './lib/wpcode-adapter.js';
+export {
+  createFontsPluginAdapter,
+  type FontsPluginAdapter,
+  type FontsPluginInfo,
+  type CustomFontInput,
+} from './lib/fonts-plugin-adapter.js';

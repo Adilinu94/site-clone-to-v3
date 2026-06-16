@@ -10,7 +10,10 @@
     "clone-v3": "./dist/bin/clone-v3.js"
   },
   "scripts": {
-    "test": "vitest run",
+    "test": "vitest run tests/unit",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:all": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "build": "tsc && chmod +x dist/bin/clone-v3.js",
