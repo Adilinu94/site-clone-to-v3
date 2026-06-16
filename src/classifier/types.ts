@@ -73,14 +73,31 @@ export interface SettingsProvenance {
 export interface SectionSpec {
   $schema: string;
   section_id: string;
+  /** Optional alias used by the v3-builder test doubles. */
+  id?: string;
   source: {
     url: string;
     selector: string;
     y_range: [number, number];
     screenshot?: string;
   };
+  /** Convenience alias for source.selector (v3-builder compat). */
+  selector?: string;
   pattern: V3LayoutPattern;
+  /** Convenience title used by v3-builder test doubles. */
+  title?: string;
   v3_section: V3Section;
+  /**
+   * Flat widget list (v3-builder compat). When present, downstream
+   * stages prefer this over v3_section.columns[].widgets[].
+   */
+  widgets?: WidgetSpec[];
+  /** Flat layout settings (v3-builder compat). */
+  layout?: SettingsMap;
+  /** Container width for the section (v3-builder compat). */
+  containerWidth?: number;
+  /** Class names applied to the V3 element (v3-builder compat). */
+  classes?: string[];
   settings_provenance: SettingsProvenance;
   assets_required: Array<{
     type: 'image' | 'video' | 'font' | 'svg' | 'icon';
@@ -95,6 +112,24 @@ export interface SectionSpec {
   }>;
   user_overrides: Record<string, unknown>;
 }
+
+/** A flat widget description consumed by v3/v4 builders. */
+export interface WidgetSpec {
+  type: V3WidgetType;
+  /** Source DOM element selector (for provenance). */
+  source_selector?: string;
+  /** Source DOM tag (h1, p, img, a.btn, etc.). */
+  source_tag?: string;
+  /** Inner content (text for headings/paragraphs, alt-text for images). */
+  content?: string;
+  /** V3 settings to apply. */
+  settings: Record<string, unknown>;
+  /** Class names applied to the V3 widget. */
+  classes?: string[];
+}
+
+/** Map of V3 setting key → value, used by the v3-builder. */
+export type SettingsMap = Record<string, unknown>;
 
 /** Per-section Picker state (user decision). */
 export interface PickerDecision {

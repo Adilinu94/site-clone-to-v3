@@ -21,6 +21,18 @@ import {
   type AnimationInfo,
   type FontIntercept,
 } from './types.js';
+
+// Re-export the public types so downstream consumers (pipeline.ts,
+// MCP adapter, etc.) can import them from this module.
+export type {
+  ExtractionOptions,
+  ExtractionResult,
+  AnimationInfo,
+  FontIntercept,
+  SectionInfo,
+  ComputedStyleSnapshot,
+} from './types.js';
+export { DEFAULT_VIEWPORTS } from './types.js';
 import {
   FontUrlCollector,
   buildFontRouteHandler,

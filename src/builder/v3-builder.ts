@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import type { SectionSpec, WidgetSpec, SettingsMap } from '../classifier/types.js';
+import { sectionClassName } from './animation-injector.js';
 
 export interface V3Element {
   id: string;
@@ -59,16 +60,29 @@ function buildWidget(widget: WidgetSpec, breakpoint: 'desktop' | 'tablet' | 'mob
 }
 
 function buildSection(section: SectionSpec, breakpoint: 'desktop' | 'tablet' | 'mobile'): V3Element {
-  const widgets = section.widgets.map((w) => buildWidget(w, breakpoint));
+  // Phase 7: link V3 section to sectionClassName for animation targeting
+  // (WPCode snippets target `.section-<section_id>` selectors).
+  const animationClass = sectionClassName(section.section_id);
+
+  // Prefer flat widgets[] (v3-builder compat), fall back to v3_section.columns.
+  const flatWidgets: WidgetSpec[] =
+    section.widgets ?? section.v3_section?.columns?.flatMap((c) => c.widgets) ?? [];
+
+  const widgets = flatWidgets.map((w) => buildWidget(w, breakpoint));
+  const layout: SettingsMap = section.layout ?? section.v3_section?.settings ?? {};
+  const containerWidth = section.containerWidth ?? 1200;
+
   return {
     id: genId('s'),
     elType: 'section',
     settings: applySettings(
       {
-        content_width: { size: section.containerWidth ?? 1200, unit: 'px' },
+        content_width: { size: containerWidth, unit: 'px' },
         gap: 'no',
+        _css_classes: animationClass,
+        custom_css: `.${animationClass} { animation-fill-mode: both; }`,
       },
-      section.layout,
+      layout,
       breakpoint,
     ),
     elements: [

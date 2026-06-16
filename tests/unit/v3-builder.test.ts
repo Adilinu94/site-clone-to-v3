@@ -5,6 +5,7 @@ import type { SectionSpec } from '../../src/classifier/types.js';
 const sampleSections: SectionSpec[] = [
   {
     id: 'sec-1',
+    section_id: 'sec-1',
     selector: '#masthead',
     pattern: 'sticky-header',
     title: 'Header',
@@ -17,6 +18,7 @@ const sampleSections: SectionSpec[] = [
   },
   {
     id: 'sec-2',
+    section_id: 'sec-2',
     selector: '#content',
     pattern: 'content',
     title: 'Content',
@@ -62,5 +64,15 @@ describe('v3-builder', () => {
   it('counts widgets correctly', () => {
     const data = buildV3PageData(sampleSections, 'https://example.com');
     expect(data.metadata.widgetCount).toBe(2);
+  });
+
+  it('attaches section-* animation class to each section (Phase 7)', () => {
+    const data = buildV3PageData(sampleSections, 'https://example.com');
+    const first = data.content[0];
+    const second = data.content[1];
+    expect(first.settings?._css_classes).toBe('section-sec-1');
+    expect(second.settings?._css_classes).toBe('section-sec-2');
+    expect(first.settings?.custom_css).toContain('.section-sec-1');
+    expect(second.settings?.custom_css).toContain('.section-sec-2');
   });
 });

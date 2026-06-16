@@ -85,6 +85,7 @@ async function main(): Promise<void> {
 
   const outputDir = args.outputDir ?? `./pipeline-outputs/${Date.now()}`;
   const options: PipelineOptions = {
+    url: args.url,
     outputDir,
     dryRun: args.command === 'dry-run',
     syncToMcp: args.syncToMcp,
@@ -93,8 +94,6 @@ async function main(): Promise<void> {
     skipStages: args.stages
       ? [1, 2, 3, 4, 5].filter((n) => !args.stages!.includes(n))
       : undefined,
-    enableAssets: !args.stages || args.stages.includes(3),
-    enableDesignTokens: !args.stages || args.stages.includes(4),
   };
 
   console.log(`[clone] ${args.command} ${args.url}`);

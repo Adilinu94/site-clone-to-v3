@@ -47,9 +47,12 @@ function widgetToAtomic(widget: WidgetSpec): V4AtomicElement {
   };
 }
 
-function sectionToAtomic(section: SectionSpec, globalClasses: string[]): V4AtomicElement {
+function sectionToAtomic(section: SectionSpec): V4AtomicElement {
   const id = genAtomicId('sec');
-  const widgets = section.widgets.map(widgetToAtomic);
+  const flatWidgets: WidgetSpec[] =
+    section.widgets ?? section.v3_section?.columns?.flatMap((c) => c.widgets) ?? [];
+  const widgets = flatWidgets.map(widgetToAtomic);
+  const containerWidth = section.containerWidth ?? 1200;
   return {
     id,
     type: 'e-flexbox',
@@ -57,7 +60,7 @@ function sectionToAtomic(section: SectionSpec, globalClasses: string[]): V4Atomi
     settings: {
       direction: 'column',
       gap: { size: 16, unit: 'px' },
-      content_width: { size: section.containerWidth ?? 1200, unit: 'px' },
+      content_width: { size: containerWidth, unit: 'px' },
     },
     styles: {},
     classes: section.classes ?? [],
@@ -74,7 +77,7 @@ export function buildV4Plan(
   idCounter = 0;
   const allClasses = new Set<string>();
   const elements = sections.map((s) => {
-    const atomic = sectionToAtomic(s, []);
+    const atomic = sectionToAtomic(s);
     for (const c of atomic.classes ?? []) allClasses.add(c);
     for (const w of atomic.elements ?? []) {
       for (const c of w.classes ?? []) allClasses.add(c);

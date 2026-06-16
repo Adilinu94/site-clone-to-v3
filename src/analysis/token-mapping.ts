@@ -24,6 +24,7 @@ export interface TokenMappingOptions {
 }
 
 const FONT_TYPES = new Set(['font', 'typography', 'text']);
+void FONT_TYPES;
 
 function sanitizeLabel(label: string): string {
   return label.replace(/[^a-z0-9-]/gi, '-').toLowerCase();

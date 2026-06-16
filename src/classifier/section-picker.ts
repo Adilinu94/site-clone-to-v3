@@ -67,6 +67,9 @@ export interface ClassifyAllResult {
   selectedManifest: SelectedSections;
 }
 
+/** Alias kept for back-compat with pipeline.ts. */
+export type ClassifyResult = ClassifyAllResult;
+
 /**
  * Classify all sections and write per-section spec files.
  */

@@ -100,7 +100,7 @@ export async function syncTokens(
     });
 
     const data = parseDataFromContent(foundation);
-    const idMap = data?.variables ?? {};
+    const idMap = (data?.variables ?? {}) as Record<string, string>;
     for (const v of newVariables) {
       const realId = idMap[v.label] ?? idMap[v.id];
       if (realId) {
