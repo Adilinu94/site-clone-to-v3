@@ -6,9 +6,21 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "bin": {
-    "clone-v3": "./dist/bin/clone-v3.js"
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
   },
+  "bin": {
+    "clone-v3": "./dist/cli/clone-v3.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
   "scripts": {
     "test": "vitest run tests/unit",
     "test:unit": "vitest run tests/unit",
@@ -16,12 +28,14 @@
     "test:all": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "build": "tsc && chmod +x dist/bin/clone-v3.js",
+    "build": "tsc",
+    "prepublishOnly": "npm run test:unit && npm run build",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "changelog": "tsx scripts/generate-changelog.ts",
     "dev": "tsx src/cli/clone-v3.ts",
-    "start": "node dist/bin/clone-v3.js"
+    "start": "node dist/cli/clone-v3.js"
   },
   "engines": {
     "node": ">=18"
@@ -61,11 +75,14 @@
   "keywords": [
     "elementor",
     "elementor-v3",
+    "elementor-v4",
     "wordpress",
     "novamira",
     "site-clone",
+    "website-cloner",
     "framer",
-    "reverse-engineering"
+    "reverse-engineering",
+    "wp-cli"
   ],
   "author": "Adilinu94",
   "repository": {
@@ -74,5 +91,9 @@
   },
   "bugs": {
     "url": "https://github.com/Adilinu94/site-clone-to-v3/issues"
+  },
+  "homepage": "https://github.com/Adilinu94/site-clone-to-v3#readme",
+  "publishConfig": {
+    "access": "public"
   }
 }
