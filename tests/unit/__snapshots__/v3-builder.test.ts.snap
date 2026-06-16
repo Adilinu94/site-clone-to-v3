@@ -1,0 +1,44 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`v3-builder > matches V3 page-data structure snapshot (regression test) > v3-page-data-stable-shape 1`] = `
+{
+  "content_length": 2,
+  "first_section_shape": {
+    "elType": "section",
+    "element_count": 1,
+    "first_column_elType": "column",
+    "first_widget_settings_keys": [
+      "header_size",
+      "title",
+    ],
+    "first_widget_type": "widget",
+    "settings_keys": [
+      "_css_classes",
+      "content_width",
+      "custom_css",
+      "gap",
+      "padding",
+    ],
+  },
+  "metadata": {
+    "sectionCount": 2,
+    "sourceUrl": "https://example.com",
+    "widgetCount": 2,
+  },
+  "title": "Snapshot Test",
+  "type": "page",
+}
+`;
+
+exports[`v3-builder > matches V3 section-id pattern snapshot (regression test) > v3-section-id-pattern 1`] = `
+[
+  {
+    "css_class": "section-sec-1",
+    "custom_css_prefix": ".section-sec-1",
+  },
+  {
+    "css_class": "section-sec-2",
+    "custom_css_prefix": ".section-sec-2",
+  },
+]
+`;

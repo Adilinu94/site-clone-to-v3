@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateRecommendations, type AcceptanceReport } from '../../src/qa/acceptance.js';
+import { generateRecommendations, summarizeBatch, type AcceptanceReport } from '../../src/qa/acceptance.js';
 
 function makeReport(diffPercent: number, width = 1440, height = 900): AcceptanceReport {
   return {
@@ -63,5 +63,28 @@ describe('acceptance (recommendations)', () => {
   it('provides tuning advice for good match', () => {
     const recs = generateRecommendations(makeReport(10).diffResult, 0.85);
     expect(recs.some((r) => r.match(/Acceptable match|Fine-tune/))).toBe(true);
+  });
+});
+
+describe('summarizeBatch', () => {
+  it('returns zeros for empty batch', async () => {
+    const result = await summarizeBatch([]);
+    expect(result).toEqual({ total: 0, passed: 0, failed: 0, warnings: 0, averageScore: 0 });
+  });
+
+  it('aggregates pass/fail/warning counts and average score', async () => {
+    const reports: AcceptanceReport[] = [
+      { ...makeReport(5), verdict: 'pass' as const },     // score 0.95
+      { ...makeReport(10), verdict: 'pass' as const },    // score 0.90
+      { ...makeReport(20), verdict: 'warning' as const }, // score 0.80
+      { ...makeReport(50), verdict: 'fail' as const },    // score 0.50
+    ];
+    const result = await summarizeBatch(reports);
+    expect(result.total).toBe(4);
+    expect(result.passed).toBe(2);
+    expect(result.failed).toBe(1);
+    expect(result.warnings).toBe(1);
+    // average = (0.95 + 0.90 + 0.80 + 0.50) / 4 = 0.7875
+    expect(result.averageScore).toBeCloseTo(0.7875, 4);
   });
 });

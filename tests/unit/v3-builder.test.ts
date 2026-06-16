@@ -75,4 +75,39 @@ describe('v3-builder', () => {
     expect(first.settings?.custom_css).toContain('.section-sec-1');
     expect(second.settings?.custom_css).toContain('.section-sec-2');
   });
+
+  it('matches V3 page-data structure snapshot (regression test)', () => {
+    const data = buildV3PageData(sampleSections, 'https://example.com', 'Snapshot Test');
+    // Snapshot the stable top-level shape (exclude timestamps + dynamic IDs).
+    const stable = {
+      title: data.title,
+      type: data.type,
+      content_length: data.content.length,
+      first_section_shape: {
+        elType: data.content[0].elType,
+        settings_keys: Object.keys(data.content[0].settings ?? {}).sort(),
+        element_count: data.content[0].elements?.length,
+        first_column_elType: data.content[0].elements?.[0]?.elType,
+        first_widget_type: data.content[0].elements?.[0]?.elements?.[0]?.elType,
+        first_widget_settings_keys: Object.keys(
+          data.content[0].elements?.[0]?.elements?.[0]?.settings ?? {},
+        ).sort(),
+      },
+      metadata: {
+        sourceUrl: data.metadata.sourceUrl,
+        sectionCount: data.metadata.sectionCount,
+        widgetCount: data.metadata.widgetCount,
+      },
+    };
+    expect(stable).toMatchSnapshot('v3-page-data-stable-shape');
+  });
+
+  it('matches V3 section-id pattern snapshot (regression test)', () => {
+    const data = buildV3PageData(sampleSections, 'https://example.com');
+    const ids = data.content.map((s) => ({
+      css_class: s.settings?._css_classes,
+      custom_css_prefix: (s.settings?.custom_css as string | undefined)?.split(' ')[0],
+    }));
+    expect(ids).toMatchSnapshot('v3-section-id-pattern');
+  });
 });
