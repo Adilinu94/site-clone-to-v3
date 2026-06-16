@@ -9,6 +9,25 @@ export {
   parseGoogleFontsQuery,
   buildFontRouteHandler,
 } from './font-discovery.js';
+export { waitForHydration } from './hydration-wait.js';
+export { triggerLazyLoad } from './lazy-scroll.js';
+export {
+  walkComputedStyles,
+  walkComputedStylesMultiViewport,
+  injectDefaultsTable,
+  CURATED_PROPERTIES,
+  type CuratedProperty,
+  type WalkOptions,
+} from './computed-styles.js';
+export { detectSections, type DetectSectionsOptions } from './section-detector.js';
+export {
+  discoverAnimations,
+  buildCssBodyCollector,
+  type AnimationDiscovery,
+  type KeyframeDefinition,
+  type TransitionUsage,
+  type CrossOriginStylesheet,
+} from './keyframes-discovery.js';
 export {
   DEFAULT_VIEWPORTS,
   type ViewportConfig,

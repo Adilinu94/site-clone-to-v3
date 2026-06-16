@@ -31,6 +31,7 @@ qa-screenshots/
 assets/
 tmp/
 *.tmp
+pipeline-outputs/
 
 # IDE
 .vscode/

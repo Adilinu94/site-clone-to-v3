@@ -48,6 +48,17 @@ export interface AnimationInfo {
   has_scrolltrigger: boolean;
   has_framer_motion: boolean;
   has_lenis: boolean;
+  /** Sprint 2C: CSS transitions used in the DOM. */
+  transitions?: Array<{
+    selector: string;
+    property: string;
+    duration: string;
+    easing: string;
+    delay: string;
+  }>;
+  /** Sprint 2C: same-origin / cross-origin split for diagnostics. */
+  same_origin_keyframe_count?: number;
+  cross_origin_keyframe_count?: number;
 }
 
 /** Computed-style snapshot for a single node at a single viewport. */
@@ -85,6 +96,10 @@ export interface ExtractionOptions {
   maxStyles?: number;
   /** Headless browser (default: chromium). */
   browser?: 'chromium' | 'firefox' | 'webkit';
+  /** Custom CSS properties to also read in the computed-style walk. */
+  customProperties?: string[];
+  /** Max sections to detect (default: 50). */
+  maxSections?: number;
 }
 
 /** Top-level extraction result. */
@@ -104,4 +119,6 @@ export interface ExtractionResult {
   dom?: string;
   /** Per-viewport computed-style snapshots (only if detectResponsiveStyles). */
   computedStyles?: Record<string, ComputedStyleSnapshot[]>;
+  /** Phase 2.5: design tokens derived from computed styles + CSS variables. */
+  designTokens?: import('../analyzer/design-token-extractor.js').DesignTokens;
 }

@@ -28,6 +28,16 @@ import {
 import {
   sourceAuthToPlaywrightCookies,
 } from '../lib/source-auth.js';
+import { waitForHydration } from './hydration-wait.js';
+import { triggerLazyLoad } from './lazy-scroll.js';
+import {
+  walkComputedStyles,
+  walkComputedStylesMultiViewport,
+  injectDefaultsTable,
+} from './computed-styles.js';
+import { detectSections } from './section-detector.js';
+import { discoverAnimations, buildCssBodyCollector } from './keyframes-discovery.js';
+
 
 /** Build the AnimationInfo stub (Sprint 2A: basic; Sprint 2C: @keyframes discovery). */
 async function detectAnimationsBasic(page: Page): Promise<AnimationInfo> {
@@ -132,6 +142,10 @@ export async function extractFromUrl(options: ExtractionOptions): Promise<Extrac
     await page.route('**/fonts.gstatic.com/**', buildFontRouteHandler(fontCollector));
     await page.route('**/fonts.googleapis.com/**', buildFontRouteHandler(fontCollector));
 
+    // Sprint 2C: buffer CSS bodies for cross-origin @keyframes discovery
+    const cssBodyCollector = buildCssBodyCollector();
+    await page.route('**/*.css', cssBodyCollector.handler);
+
     // Initial goto
     await page.goto(options.url, { waitUntil: 'networkidle', timeout: 60_000 });
 
@@ -139,12 +153,26 @@ export async function extractFromUrl(options: ExtractionOptions): Promise<Extrac
     await page.evaluate(() => location.reload());
     await page.waitForLoadState('networkidle', { timeout: 60_000 });
 
+    // Sprint 2B: SPA-Hydration-Wait (MutationObserver fallback for Next.js/React/Webflow)
+    if (options.waitForHydration !== false) {
+      await waitForHydration(page);
+    }
+
+    // Sprint 2B: Lazy-Scroll triggers IntersectionObserver-based lazy-loads
+    if (options.scrollForLazyLoad !== false) {
+      await triggerLazyLoad(page);
+    }
+
     // Per-viewport screenshots
     const viewportResults: ExtractionResult['viewports'] = [];
     if (options.screenshots !== false) {
       for (const vp of viewports) {
         await page.setViewportSize({ width: vp.width, height: vp.height });
         await page.waitForLoadState('networkidle', { timeout: 30_000 });
+        // Re-trigger lazy load for non-desktop viewports (mobile/tablet have different lazy-load triggers)
+        if (vp.label !== 'desktop' && options.scrollForLazyLoad !== false) {
+          await triggerLazyLoad(page, { resetToTop: true });
+        }
         const filename = `screenshot-${vp.label}.png`;
         const filepath = path.join(screenshotsDir, filename);
         await page.screenshot({ path: filepath, fullPage: true });
@@ -158,16 +186,82 @@ export async function extractFromUrl(options: ExtractionOptions): Promise<Extrac
 
     // CSS variables + animations
     const cssVariables = await extractCssVariables(page);
-    const animations = options.detectAnimations !== false
-      ? await detectAnimationsBasic(page)
-      : {
-          has_keyframes: false,
-          keyframe_names: [],
-          has_gsap: false,
-          has_scrolltrigger: false,
-          has_framer_motion: false,
-          has_lenis: false,
-        };
+    let animations: AnimationInfo;
+    if (options.detectAnimations !== false) {
+      // Sprint 2C: full @keyframes discovery (same-origin + cross-origin)
+      const discovery = await discoverAnimations(page, cssBodyCollector.list());
+      const basic = await detectAnimationsBasic(page);
+      animations = {
+        has_keyframes: discovery.keyframes.length > 0,
+        keyframe_names: discovery.keyframes.map((k) => k.name),
+        has_gsap: basic.has_gsap,
+        has_scrolltrigger: basic.has_scrolltrigger,
+        has_framer_motion: basic.has_framer_motion,
+        has_lenis: basic.has_lenis,
+        transitions: discovery.transitions,
+        same_origin_keyframe_count: discovery.same_origin_count,
+        cross_origin_keyframe_count: discovery.cross_origin_count,
+      };
+    } else {
+      animations = {
+        has_keyframes: false,
+        keyframe_names: [],
+        has_gsap: false,
+        has_scrolltrigger: false,
+        has_framer_motion: false,
+        has_lenis: false,
+      };
+    }
+
+    // Sprint 2C: Section-Detection
+    const sections = options.detectSections !== false
+      ? await detectSections(page, { maxSections: options.maxSections })
+      : [];
+
+    // Sprint 2C: Computed-Style-Walk (single viewport by default, multi if requested)
+    let computedStyles: Record<string, import('./types.js').ComputedStyleSnapshot[]> | undefined;
+    if (options.detectResponsiveStyles === true) {
+      await injectDefaultsTable(page);
+      computedStyles = await walkComputedStylesMultiViewport(
+        page,
+        viewports,
+        {
+          maxNodes: options.maxStyles ?? 500,
+          customProperties: options.customProperties,
+        },
+      );
+    } else if (options.maxStyles && options.maxStyles > 0) {
+      await injectDefaultsTable(page);
+      const desktopSnapshots = await walkComputedStyles(page, {
+        maxNodes: options.maxStyles,
+        customProperties: options.customProperties,
+      });
+      computedStyles = { [viewports[0].label]: desktopSnapshots };
+    }
+
+    // Phase 2.5: Design-Token-Intelligence (auto-runs if styles.json exists)
+    // Lazy-import to avoid bundling the analyzer in non-token runs
+    let designTokens: import('../analyzer/design-token-extractor.js').DesignTokens | undefined;
+    if (computedStyles) {
+      const { buildDesignTokens } = await import('../analyzer/design-token-extractor.js');
+      // Flatten all viewports' snapshots into a single style list
+      const allStyles: import('../analyzer/color-extractor.js').StyleNode[] = [];
+      for (const snapshots of Object.values(computedStyles)) {
+        allStyles.push(
+          ...snapshots.map((s) => ({
+            selector: s.selector,
+            tag: s.tag,
+            styles: s.styles,
+          })),
+        );
+      }
+      designTokens = buildDesignTokens({
+        styles: allStyles,
+        cssVariables,
+        fontsDetected: fontCollector.list(),
+        sourceUrl: options.url,
+      });
+    }
 
     // Persist JSON outputs
     const fontsIntercepted: FontIntercept[] = fontCollector.list();
@@ -178,8 +272,10 @@ export async function extractFromUrl(options: ExtractionOptions): Promise<Extrac
       viewports: viewportResults,
       fontsIntercepted,
       cssVariables,
-      sections: [], // Sprint 3
+      sections,
       animations,
+      computedStyles,
+      designTokens,
     };
 
     await fs.writeFile(
@@ -194,6 +290,16 @@ export async function extractFromUrl(options: ExtractionOptions): Promise<Extrac
       path.join(options.outputDir, 'animations.json'),
       JSON.stringify(animations, null, 2),
     );
+    await fs.writeFile(
+      path.join(options.outputDir, 'sections.json'),
+      JSON.stringify(sections, null, 2),
+    );
+    if (computedStyles) {
+      await fs.writeFile(
+        path.join(options.outputDir, 'styles.json'),
+        JSON.stringify(computedStyles, null, 2),
+      );
+    }
     await fs.writeFile(
       path.join(options.outputDir, 'extraction-result.json'),
       JSON.stringify(result, null, 2),
