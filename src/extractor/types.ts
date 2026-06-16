@@ -38,6 +38,12 @@ export interface SectionInfo {
   y_range: [number, number];
   layout: string;
   child_count: number;
+  /** Source DOM tag (e.g. 'section', 'header', 'footer', 'main'). */
+  tag?: string;
+  /** Source DOM id attribute (if present). */
+  id?: string;
+  /** Source DOM class attribute (if present). */
+  classes?: string;
 }
 
 /** Animation/Framework detection results. */
