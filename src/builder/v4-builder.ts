@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import type { SectionSpec, WidgetSpec } from '../classifier/types.js';
+import { v3Id } from '../lib/v3-id.js';
 
 export interface V4AtomicElement {
   id: string;
@@ -29,16 +30,9 @@ export interface V4BuildPlan {
 const V4_VERSION = '0.1';
 const ATOMIC = true;
 
-let idCounter = 0;
-function genAtomicId(prefix: string): string {
-  idCounter += 1;
-  return `${prefix}-${idCounter.toString().padStart(7, '0')}`;
-}
-
 function widgetToAtomic(widget: WidgetSpec): V4AtomicElement {
-  const id = genAtomicId(widget.type.slice(0, 4));
   return {
-    id,
+    id: v3Id(),
     type: widget.type,
     atomic: ATOMIC,
     settings: { ...widget.settings },
@@ -48,13 +42,12 @@ function widgetToAtomic(widget: WidgetSpec): V4AtomicElement {
 }
 
 function sectionToAtomic(section: SectionSpec): V4AtomicElement {
-  const id = genAtomicId('sec');
   const flatWidgets: WidgetSpec[] =
     section.widgets ?? section.v3_section?.columns?.flatMap((c) => c.widgets) ?? [];
   const widgets = flatWidgets.map(widgetToAtomic);
   const containerWidth = section.containerWidth ?? 1200;
   return {
-    id,
+    id: v3Id(),
     type: 'e-flexbox',
     atomic: ATOMIC,
     settings: {
@@ -74,7 +67,6 @@ export function buildV4Plan(
   title = 'Cloned Page (V4)',
   pageId = 'clone-page-001',
 ): V4BuildPlan {
-  idCounter = 0;
   const allClasses = new Set<string>();
   const elements = sections.map((s) => {
     const atomic = sectionToAtomic(s);

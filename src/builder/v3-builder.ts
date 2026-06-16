@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import type { SectionSpec, WidgetSpec, SettingsMap } from '../classifier/types.js';
 import { sectionClassName } from './animation-injector.js';
+import { v3Id } from '../lib/v3-id.js';
 
 export interface V3Element {
   id: string;
@@ -27,12 +28,6 @@ export interface V3PageData {
 
 const V3_VERSION = '0.4';
 
-let idCounter = 0;
-function genId(prefix: string): string {
-  idCounter += 1;
-  return `${prefix}${idCounter.toString().padStart(7, '0')}`;
-}
-
 function applySettings(
   base: Record<string, unknown>,
   settings: SettingsMap,
@@ -52,7 +47,7 @@ function applySettings(
 
 function buildWidget(widget: WidgetSpec, breakpoint: 'desktop' | 'tablet' | 'mobile'): V3Element {
   return {
-    id: genId('e'),
+    id: v3Id(),
     elType: 'widget',
     widgetType: widget.type,
     settings: applySettings({}, widget.settings, breakpoint),
@@ -73,7 +68,7 @@ function buildSection(section: SectionSpec, breakpoint: 'desktop' | 'tablet' | '
   const containerWidth = section.containerWidth ?? 1200;
 
   return {
-    id: genId('s'),
+    id: v3Id(),
     elType: 'section',
     settings: applySettings(
       {
@@ -87,7 +82,7 @@ function buildSection(section: SectionSpec, breakpoint: 'desktop' | 'tablet' | '
     ),
     elements: [
       {
-        id: genId('c'),
+        id: v3Id(),
         elType: 'column',
         settings: { _column_size: 100, _inline_size: null },
         elements: widgets,
@@ -101,7 +96,6 @@ export function buildV3PageData(
   sourceUrl: string,
   title = 'Cloned Page',
 ): V3PageData {
-  idCounter = 0;
   const content = sections.map((s) => buildSection(s, 'desktop'));
   return {
     title,
