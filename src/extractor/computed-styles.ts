@@ -20,7 +20,10 @@
 import type { Page } from 'playwright';
 import type { ComputedStyleSnapshot } from './types.js';
 
-/** Curated set of visual properties that matter for V3 widget settings. */
+/** Curated set of visual properties that matter for V3 widget settings.
+ *  Phase 4 (UMBAUPLAN §7.2): expanded to ~80 props covering pseudo-states,
+ *  custom-properties (auto-detect), animation-*, transition-*, and the
+ *  remaining visual props (cursor, whiteSpace, textOverflow, objectFit, ...). */
 export const CURATED_PROPERTIES = [
   // Layout / box-model
   'display', 'position', 'top', 'right', 'bottom', 'left', 'z-index',
@@ -28,48 +31,69 @@ export const CURATED_PROPERTIES = [
   'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
   'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
   'box-sizing', 'overflow', 'overflow-x', 'overflow-y',
-  // Background
+  // Background (Phase 4: added `background` shorthand)
   'background-color', 'background-image', 'background-size', 'background-position',
-  'background-repeat', 'background-attachment',
-  // Border
+  'background-repeat', 'background-attachment', 'background',
+  // Border (Phase 4: added `border` shorthand)
   'border-top-width', 'border-right-width', 'border-bottom-width', 'border-left-width',
   'border-top-style', 'border-right-style', 'border-bottom-style', 'border-left-style',
   'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color',
   'border-top-left-radius', 'border-top-right-radius',
   'border-bottom-left-radius', 'border-bottom-right-radius',
+  'border',
   // Typography
   'font-family', 'font-size', 'font-weight', 'font-style',
   'line-height', 'letter-spacing', 'text-align', 'text-transform',
   'text-decoration', 'text-decoration-color', 'color',
-  // Effects
-  'opacity', 'box-shadow', 'filter', 'backdrop-filter', 'transform',
+  // Effects (Phase 4: added cursor, mix-blend-mode)
+  'opacity', 'box-shadow', 'filter', 'backdrop-filter', 'transform', 'cursor', 'mix-blend-mode',
   // Flex / Grid
   'flex-direction', 'flex-wrap', 'justify-content', 'align-items', 'align-content', 'gap',
   'grid-template-columns', 'grid-template-rows', 'grid-gap',
+  // Text overflow / wrapping (Phase 4)
+  'white-space', 'text-overflow', '-webkit-line-clamp',
+  // Replaced / object-fit (Phase 4)
+  'object-fit', 'object-position',
+  // Transitions (Phase 4 — granular extraction moved to animation-property-extractor.ts,
+  // but keep `transition` shorthand here so non-default transitions are visible in
+  // the baseline snapshot).
+  'transition',
 ] as const;
 
 export type CuratedProperty = (typeof CURATED_PROPERTIES)[number];
 
-/** Properties considered "default" (skipped unless explicitly set). */
+/** Properties considered "default" (skipped unless explicitly set).
+ *  Phase 4: added defaults for the new props. */
 export const DEFAULT_VALUES: Partial<Record<CuratedProperty, string[]>> = {
   'display': ['block', 'inline'],
   'position': ['static'],
   'box-sizing': ['content-box'],
   'overflow': ['visible'],
+  'overflow-x': ['visible'],
+  'overflow-y': ['visible'],
   'background-color': ['rgba(0, 0, 0, 0)'],
   'background-repeat': ['repeat'],
   'background-attachment': ['scroll'],
+  'background-image': ['none'],
+  'background': ['none'],
   'border-top-style': ['none'],
   'border-right-style': ['none'],
   'border-bottom-style': ['none'],
   'border-left-style': ['none'],
+  'border': ['none'],
   'font-style': ['normal'],
   'text-align': ['start'],
   'text-decoration': ['none'],
   'opacity': ['1'],
   'flex-direction': ['row'],
   'flex-wrap': ['nowrap'],
-  'background-image': ['none'],
+  'cursor': ['auto'],
+  'mix-blend-mode': ['normal'],
+  'white-space': ['normal'],
+  'text-overflow': ['clip'],
+  'object-fit': ['fill'],
+  'object-position': ['50% 50%'],
+  'transition': ['all 0s ease 0s', 'none'],
 };
 
 export interface WalkOptions {

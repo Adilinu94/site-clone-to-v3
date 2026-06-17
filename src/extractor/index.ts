@@ -54,6 +54,42 @@ export {
   type CrossOriginStylesheet,
 } from './keyframes-discovery.js';
 export {
+  capturePseudoStates,
+  flattenPseudoStates,
+  PSEUDO_STATES,
+  DEFAULT_PSEUDO_PROPERTIES,
+  type PseudoState,
+  type PseudoStateSnapshot,
+  type CapturePseudoStatesOptions,
+} from './pseudo-state-capture.js';
+export {
+  extractCustomProperties,
+  groupByTokenCategory,
+  type CustomProperty,
+  type ExtractCustomPropertiesOptions,
+} from './custom-property-extractor.js';
+export {
+  extractAnimationProperties,
+  type AnimationProperties,
+  type AnimationExtractionResult,
+} from './animation-property-extractor.js';
+export {
+  parseBackgroundImage,
+  splitTopLevelCommas,
+  firstUrl,
+  parseBackgroundImages,
+  type BackgroundLayer,
+  type BackgroundImageParseResult,
+} from './background-image-parser.js';
+export {
+  extractFontLoadingState,
+  normalizeFamily,
+  rollupFamilies,
+  effectiveFallback,
+  type FontFamilyStatus,
+  type FontLoadingStateResult,
+} from './font-loading-state.js';
+export {
   DEFAULT_VIEWPORTS,
   type ViewportConfig,
   type FontIntercept,
