@@ -299,3 +299,494 @@ function parsePx(value: string | undefined): number | null {
 function isTransparent(value: string): boolean {
   return /rgba\([^)]+,\s*0\)|transparent/.test(value);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// V2 Phase 5: Pro-Widget mapping (14 widgets)
+// Spec: BAUPLAN-V3-PIXEL-PERFEKT.md §9.3
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** All Pro widget names recognised by Phase 5. */
+export type ProWidgetType =
+  | 'slider'
+  | 'accordion'
+  | 'tabs'
+  | 'counter'
+  | 'testimonial-carousel'
+  | 'price-table'
+  | 'animated-headline'
+  | 'progress-bar'
+  | 'forms'
+  | 'posts'
+  | 'share-buttons'
+  | 'gallery'
+  | 'image-box'
+  | 'icon-box';
+
+/** A V3 widget suggestion for a Pro-only widget. */
+export interface ProWidgetSuggestion {
+  type: ProWidgetType;
+  source_selector: string;
+  source_tag: string;
+  content?: string;
+  settings: Record<string, unknown>;
+  /** Whether the widget requires Elementor Pro at render time. */
+  requires_pro: true;
+  /** Heuristic source (class / structure / data-attr). */
+  detection: ProDetectionSource;
+  /** Suggested fallback if Pro is unavailable. */
+  fallback: 'text-editor' | 'html';
+  warnings: string[];
+}
+
+export type ProDetectionSource =
+  | 'pro-css-class'
+  | 'data-attr'
+  | 'structure'
+  | 'data-settings'
+  | 'testimonial-pattern'
+  | 'price-pattern'
+  | 'counter-pattern';
+
+/** Inputs for detectProWidget — same shape as mapElementsToWidgets but Pro-only. */
+export interface ProWidgetInput {
+  tag: string;
+  selector: string;
+  classes?: readonly string[];
+  attributes?: Readonly<Record<string, string>>;
+  /** Surrounding inner structure (children selectors + tags) for structural heuristics. */
+  childStructure?: ReadonlyArray<{ tag: string; selector: string }>;
+  /** Captured content (heading text, testimonial body, etc.). */
+  content?: string;
+  /** Captured styles (used by some heuristics like animated-headline). */
+  styles?: Record<string, string>;
+}
+
+/** Detect if a DOM element is a Pro-only widget. Returns null if not. */
+export function detectProWidget(input: ProWidgetInput): ProWidgetSuggestion | null {
+  const { tag, selector, classes = [], attributes = {}, childStructure = [], content, styles = {} } = input;
+
+  // 1. Slider / Carousel (elementor-widget-slider + slides wrapper)
+  if (hasProClass(classes, ['elementor-widget-slider', 'swiper'])) {
+    return buildSuggestion({
+      type: 'slider',
+      selector,
+      tag,
+      content,
+      detection: 'pro-css-class',
+      settings: buildSliderSettings(attributes, childStructure),
+    });
+  }
+
+  // 2. Accordion (elementor-widget-accordion OR [data-accordion])
+  if (
+    hasProClass(classes, ['elementor-widget-accordion']) ||
+    hasAttribute(attributes, 'data-accordion')
+  ) {
+    return buildSuggestion({
+      type: 'accordion',
+      selector,
+      tag,
+      content,
+      detection: hasAttribute(attributes, 'data-accordion') ? 'data-attr' : 'pro-css-class',
+      settings: buildAccordionSettings(attributes, childStructure),
+    });
+  }
+
+  // 3. Tabs
+  if (hasProClass(classes, ['elementor-widget-tabs']) || hasAttribute(attributes, 'data-tabs')) {
+    return buildSuggestion({
+      type: 'tabs',
+      selector,
+      tag,
+      content,
+      detection: hasAttribute(attributes, 'data-tabs') ? 'data-attr' : 'pro-css-class',
+      settings: buildTabsSettings(attributes, childStructure),
+    });
+  }
+
+  // 4. Counter (elementor-widget-counter + data-duration OR numeric prefix in content)
+  if (
+    hasProClass(classes, ['elementor-widget-counter']) ||
+    (tag === 'div' && hasClassPrefix(classes, 'counter-'))
+  ) {
+    return buildSuggestion({
+      type: 'counter',
+      selector,
+      tag,
+      content,
+      detection: 'counter-pattern',
+      settings: buildCounterSettings(content, attributes),
+    });
+  }
+
+  // 5. Testimonial Carousel (elementor-widget-testimonial + data-slider OR has .swiper-slide)
+  if (
+    hasProClass(classes, ['elementor-widget-testimonial', 'elementor-widget-testimonial-carousel']) ||
+    (hasProClass(classes, ['elementor-widget-testimonial']) && hasSwiperSlides(childStructure))
+  ) {
+    return buildSuggestion({
+      type: 'testimonial-carousel',
+      selector,
+      tag,
+      content,
+      detection: 'testimonial-pattern',
+      settings: buildTestimonialCarouselSettings(content, childStructure),
+    });
+  }
+
+  // 6. Price Table (elementor-widget-price-table OR structure: heading + price + features + button)
+  if (
+    hasProClass(classes, ['elementor-widget-price-table']) ||
+    isPriceTableStructure(childStructure)
+  ) {
+    return buildSuggestion({
+      type: 'price-table',
+      selector,
+      tag,
+      content,
+      detection: hasProClass(classes, ['elementor-widget-price-table']) ? 'pro-css-class' : 'price-pattern',
+      settings: buildPriceTableSettings(childStructure),
+    });
+  }
+
+  // 7. Animated Headline (.elementor-headline + data-settings OR animated text inside)
+  if (hasProClass(classes, ['elementor-widget-animated-headline', 'elementor-headline'])) {
+    return buildSuggestion({
+      type: 'animated-headline',
+      selector,
+      tag,
+      content,
+      detection: 'data-settings',
+      settings: buildAnimatedHeadlineSettings(content, attributes, styles),
+    });
+  }
+
+  // 8. Progress Bar (.elementor-widget-progress-bar)
+  if (hasProClass(classes, ['elementor-widget-progress-bar', 'elementor-progress-bar'])) {
+    return buildSuggestion({
+      type: 'progress-bar',
+      selector,
+      tag,
+      content,
+      detection: 'pro-css-class',
+      settings: buildProgressBarSettings(attributes),
+    });
+  }
+
+  // 9. Forms (form tag + elementor-form class OR e-form- prefix)
+  if (
+    (tag === 'form' && hasClassPrefix(classes, 'elementor-form')) ||
+    hasClassPrefix(classes, 'e-form-')
+  ) {
+    return buildSuggestion({
+      type: 'forms',
+      selector,
+      tag,
+      content,
+      detection: 'pro-css-class',
+      settings: buildFormsSettings(attributes, childStructure),
+    });
+  }
+
+  // 10. Posts (elementor-widget-posts OR loop-grid)
+  if (
+    hasProClass(classes, ['elementor-widget-posts', 'elementor-widget-posts-grid']) ||
+    hasClassPrefix(classes, 'loop-grid-')
+  ) {
+    return buildSuggestion({
+      type: 'posts',
+      selector,
+      tag,
+      content,
+      detection: 'pro-css-class',
+      settings: buildPostsSettings(attributes),
+    });
+  }
+
+  // 11. Share Buttons
+  if (hasProClass(classes, ['elementor-widget-share-buttons'])) {
+    return buildSuggestion({
+      type: 'share-buttons',
+      selector,
+      tag,
+      content,
+      detection: 'pro-css-class',
+      settings: { share_buttons: parseShareNetworks(classes) },
+    });
+  }
+
+  // 12. Gallery (elementor-widget-gallery)
+  if (hasProClass(classes, ['elementor-widget-gallery', 'elementor-gallery'])) {
+    return buildSuggestion({
+      type: 'gallery',
+      selector,
+      tag,
+      content,
+      detection: 'pro-css-class',
+      settings: buildGallerySettings(childStructure),
+    });
+  }
+
+  // 13. Image Box (.elementor-widget-image-box)
+  if (hasProClass(classes, ['elementor-widget-image-box'])) {
+    return buildSuggestion({
+      type: 'image-box',
+      selector,
+      tag,
+      content,
+      detection: 'pro-css-class',
+      settings: buildImageBoxSettings(content, attributes),
+    });
+  }
+
+  // 14. Icon Box (.elementor-widget-icon-box)
+  if (hasProClass(classes, ['elementor-widget-icon-box'])) {
+    return buildSuggestion({
+      type: 'icon-box',
+      selector,
+      tag,
+      content,
+      detection: 'pro-css-class',
+      settings: buildIconBoxSettings(content, attributes),
+    });
+  }
+
+  return null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper predicates + builders
+// ─────────────────────────────────────────────────────────────────────────────
+
+function hasProClass(classes: readonly string[], needles: readonly string[]): boolean {
+  for (const c of classes) {
+    if (!c) continue;
+    for (const n of needles) {
+      if (c === n || c.startsWith(`${n} `)) return true;
+    }
+  }
+  return false;
+}
+
+function hasClassPrefix(classes: readonly string[], prefix: string): boolean {
+  return classes.some(
+    (c) =>
+      c === prefix ||
+      c.startsWith(prefix) ||
+      c.startsWith(`${prefix}-`) ||
+      c.startsWith(`${prefix}_`),
+  );
+}
+
+function hasAttribute(attributes: Readonly<Record<string, string>>, name: string): boolean {
+  return Object.prototype.hasOwnProperty.call(attributes, name);
+}
+
+function hasSwiperSlides(childStructure: ReadonlyArray<{ tag: string; selector: string }>): boolean {
+  return childStructure.some((c) => /swiper-slide/i.test(c.selector) || /swiper-slide/i.test(c.tag));
+}
+
+function isPriceTableStructure(childStructure: ReadonlyArray<{ tag: string; selector: string }>): boolean {
+  const tags = childStructure.map((c) => c.tag.toLowerCase());
+  const headingPresent = tags.some((t) => /^h[1-6]$/.test(t));
+  const buttonPresent = tags.some((t) => t === 'a' || t === 'button');
+  const listPresent = tags.some((t) => t === 'ul' || t === 'ol');
+  // price-table shape: heading + price/value + list-of-features + CTA button
+  return headingPresent && buttonPresent && listPresent;
+}
+
+interface SuggestionInput {
+  type: ProWidgetType;
+  selector: string;
+  tag: string;
+  content?: string;
+  detection: ProDetectionSource;
+  settings: Record<string, unknown>;
+}
+
+function buildSuggestion(input: SuggestionInput): ProWidgetSuggestion {
+  return {
+    type: input.type,
+    source_selector: input.selector,
+    source_tag: input.tag.toLowerCase(),
+    content: input.content,
+    settings: input.settings,
+    requires_pro: true,
+    detection: input.detection,
+    fallback: chooseFallback(input.type),
+    warnings: [`Widget "${input.type}" requires Elementor Pro — fallback: ${chooseFallback(input.type)}`],
+  };
+}
+
+/** Pick the best fallback widget when Pro is unavailable. */
+function chooseFallback(type: ProWidgetType): 'text-editor' | 'html' {
+  switch (type) {
+    case 'forms':
+    case 'gallery':
+    case 'posts':
+      return 'html';
+    default:
+      return 'text-editor';
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Per-widget settings builders
+// ─────────────────────────────────────────────────────────────────────────────
+
+function buildSliderSettings(
+  attributes: Readonly<Record<string, string>>,
+  childStructure: ReadonlyArray<{ tag: string; selector: string }>,
+): Record<string, unknown> {
+  const slideCount = childStructure.filter((c) => /swiper-slide/i.test(c.selector)).length;
+  return {
+    slides: childStructure.filter((c) => /swiper-slide/i.test(c.selector)).map((c) => ({ _ref: c.selector })),
+    slides_count: slideCount,
+    autoplay: hasAttribute(attributes, 'data-autoplay') ? attributes['data-autoplay'] : 'yes',
+    arrows: hasAttribute(attributes, 'data-arrows') ? attributes['data-arrows'] : 'yes',
+    pagination: hasAttribute(attributes, 'data-pagination') ? attributes['data-pagination'] : 'bullets',
+  };
+}
+
+function buildAccordionSettings(
+  attributes: Readonly<Record<string, string>>,
+  childStructure: ReadonlyArray<{ tag: string; selector: string }>,
+): Record<string, unknown> {
+  return {
+    tabs: childStructure.filter((c) => /^h[1-6]$/i.test(c.tag) || c.tag.toLowerCase() === 'details').map((c) => ({
+      tab_title: c.selector,
+    })),
+    default_state: hasAttribute(attributes, 'data-default-state') ? attributes['data-default-state'] : 'expanded-first',
+  };
+}
+
+function buildTabsSettings(
+  attributes: Readonly<Record<string, string>>,
+  childStructure: ReadonlyArray<{ tag: string; selector: string }>,
+): Record<string, unknown> {
+  return {
+    tabs: childStructure
+      .filter((c) => /tab-title|tab-content/i.test(c.selector))
+      .map((c) => ({ tab_title: c.selector, tab_content: c.selector })),
+    type: hasAttribute(attributes, 'data-tab-type') ? attributes['data-tab-type'] : 'horizontal',
+  };
+}
+
+function buildCounterSettings(content: string | undefined, attributes: Readonly<Record<string, string>>): Record<string, unknown> {
+  const numericPart = content?.match(/-?\d[\d.,]*/)?.[0] ?? '0';
+  return {
+    ending_number: parseFloat(numericPart.replace(',', '.')) || 0,
+    prefix: content?.match(/^\D*/)?.[0] ?? '',
+    suffix: content?.match(/\D*$/)?.[0] ?? '',
+    duration: hasAttribute(attributes, 'data-duration') ? attributes['data-duration'] : '2000',
+    title: '',
+  };
+}
+
+function buildTestimonialCarouselSettings(
+  content: string | undefined,
+  childStructure: ReadonlyArray<{ tag: string; selector: string }>,
+): Record<string, unknown> {
+  return {
+    slides: childStructure.filter((c) => /swiper-slide/i.test(c.selector)).map((c) => ({
+      content: c.selector,
+      image: c.selector,
+      name: '',
+      title: '',
+    })),
+    slides_count: childStructure.filter((c) => /swiper-slide/i.test(c.selector)).length,
+    body_text: content ?? '',
+  };
+}
+
+function buildPriceTableSettings(childStructure: ReadonlyArray<{ tag: string; selector: string }>): Record<string, unknown> {
+  const tags = childStructure.map((c) => c.tag.toLowerCase());
+  return {
+    heading: tags.some((t) => /^h[1-6]$/.test(t)),
+    features_list: tags.some((t) => t === 'ul' || t === 'ol'),
+    button: tags.some((t) => t === 'a' || t === 'button'),
+    price: tags.some((t) => t === 'span' || t === 'div'),
+  };
+}
+
+function buildAnimatedHeadlineSettings(
+  content: string | undefined,
+  attributes: Readonly<Record<string, string>>,
+  styles: Record<string, string>,
+): Record<string, unknown> {
+  return {
+    headline_text: content ?? '',
+    animation_style: hasAttribute(attributes, 'data-animation') ? attributes['data-animation'] : 'highlight',
+    before_text: '',
+    highlighted_text: '',
+    after_text: '',
+    animation_duration: styles['animation-duration'] ?? '1200ms',
+  };
+}
+
+function buildProgressBarSettings(attributes: Readonly<Record<string, string>>): Record<string, unknown> {
+  return {
+    title: '',
+    percent: hasAttribute(attributes, 'data-percent')
+      ? { size: parseFloat(attributes['data-percent']) || 0, unit: '%' }
+      : { size: 50, unit: '%' },
+    inner_text: hasAttribute(attributes, 'data-inner-text') ? attributes['data-inner-text'] : '',
+    display_percentage: hasAttribute(attributes, 'data-show-percent') ? attributes['data-show-percent'] : 'show',
+  };
+}
+
+function buildFormsSettings(
+  attributes: Readonly<Record<string, string>>,
+  childStructure: ReadonlyArray<{ tag: string; selector: string }>,
+): Record<string, unknown> {
+  return {
+    form_name: hasAttribute(attributes, 'name') ? attributes['name'] : 'clone-form',
+    form_fields: childStructure
+      .filter((c) => /input|textarea|select/i.test(c.tag))
+      .map((c) => ({ _type: c.tag.toLowerCase(), _ref: c.selector })),
+    submit_text: 'Submit',
+  };
+}
+
+function buildPostsSettings(attributes: Readonly<Record<string, string>>): Record<string, unknown> {
+  return {
+    posts_per_page: hasAttribute(attributes, 'data-posts-per-page')
+      ? parseInt(attributes['data-posts-per-page'], 10) || 6
+      : 6,
+    layout: hasAttribute(attributes, 'data-layout') ? attributes['data-layout'] : 'grid',
+  };
+}
+
+function parseShareNetworks(classes: readonly string[]): string[] {
+  const networks = new Set<string>();
+  for (const c of classes) {
+    const m = c.match(/^share-([a-z]+)/i);
+    if (m) networks.add(m[1].toLowerCase());
+  }
+  return Array.from(networks);
+}
+
+function buildGallerySettings(childStructure: ReadonlyArray<{ tag: string; selector: string }>): Record<string, unknown> {
+  return {
+    gallery_items: childStructure
+      .filter((c) => c.tag.toLowerCase() === 'img' || /gallery-item/i.test(c.selector))
+      .map((c) => ({ _ref: c.selector })),
+    gallery_layout: 'grid',
+  };
+}
+
+function buildImageBoxSettings(content: string | undefined, attributes: Readonly<Record<string, string>>): Record<string, unknown> {
+  return {
+    title_text: content ?? '',
+    description_text: hasAttribute(attributes, 'data-description') ? attributes['data-description'] : '',
+    image: hasAttribute(attributes, 'data-image') ? { url: attributes['data-image'] } : { url: '' },
+  };
+}
+
+function buildIconBoxSettings(content: string | undefined, attributes: Readonly<Record<string, string>>): Record<string, unknown> {
+  return {
+    title_text: content ?? '',
+    description_text: hasAttribute(attributes, 'data-description') ? attributes['data-description'] : '',
+    icon: hasAttribute(attributes, 'data-icon') ? attributes['data-icon'] : '',
+  };
+}

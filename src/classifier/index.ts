@@ -4,3 +4,6 @@ export * from './widget-mapper.js';
 export * from './token-resolver.js';
 export * from './responsive-settings.js';
 export * from './section-picker.js';
+export * from './pro-detector.js';
+export * from './widget-degradation.js';
+export * from './widget-validator.js';
