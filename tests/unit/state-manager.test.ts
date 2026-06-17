@@ -44,7 +44,7 @@ describe('state-manager', () => {
   describe('createInitialState', () => {
     it('initializes all phases as pending', () => {
       const state = createInitialState('https://example.com', './research', fixtureOptions());
-      const phases = ['extract', 'tokens', 'classify', 'assets', 'design-system', 'build', 'qa', 'animations'] as const;
+      const phases = ['extract', 'classify', 'assets', 'tokens', 'design-system', 'build', 'qa', 'animations'] as const;
       for (const p of phases) {
         expect(state.phases[p].status).toBe('pending');
       }
@@ -126,20 +126,21 @@ describe('state-manager', () => {
     it('finds first pending phase', () => {
       const state = createInitialState('https://x.io', tmpDir, fixtureOptions());
       markCompleted(state, 'extract');
-      markCompleted(state, 'tokens');
-      expect(reconcile(state)).toBe('classify');
+      markCompleted(state, 'classify');
+      expect(reconcile(state)).toBe('assets');
     });
 
     it('resumes from failed phase', () => {
       const state = createInitialState('https://x.io', tmpDir, fixtureOptions());
       markCompleted(state, 'extract');
-      markFailed(state, 'tokens', 'fail');
-      expect(reconcile(state)).toBe('tokens');
+      markCompleted(state, 'classify');
+      markFailed(state, 'assets', 'fail');
+      expect(reconcile(state)).toBe('assets');
     });
 
     it('returns last phase when all complete', () => {
       const state = createInitialState('https://x.io', tmpDir, fixtureOptions());
-      for (const p of ['extract', 'tokens', 'classify', 'assets', 'design-system', 'build', 'qa', 'animations'] as const) {
+      for (const p of ['extract', 'classify', 'assets', 'tokens', 'design-system', 'build', 'qa', 'animations'] as const) {
         markCompleted(state, p);
       }
       expect(reconcile(state)).toBe('animations');
@@ -168,10 +169,12 @@ describe('state-manager', () => {
     it('returns true for completed/skipped', () => {
       const state = createInitialState('https://x.io', tmpDir, fixtureOptions());
       markCompleted(state, 'extract');
-      markSkipped(state, 'tokens');
+      markCompleted(state, 'classify');
+      markSkipped(state, 'assets');
       expect(isPhaseDone(state, 'extract')).toBe(true);
-      expect(isPhaseDone(state, 'tokens')).toBe(true);
-      expect(isPhaseDone(state, 'classify')).toBe(false);
+      expect(isPhaseDone(state, 'classify')).toBe(true);
+      expect(isPhaseDone(state, 'assets')).toBe(true);
+      expect(isPhaseDone(state, 'tokens')).toBe(false);
     });
   });
 

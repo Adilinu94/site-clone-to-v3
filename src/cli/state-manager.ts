@@ -48,11 +48,17 @@ export interface CloneState {
   };
 }
 
+// Phase order MUST follow the V1/V2 stage flow (see analysis/pipeline.ts + UMBAUPLAN §2.2):
+//   extract → classify → assets → tokens → design-system → build → qa → animations
+// Bug history (V1, 2026-06-16): tokens was placed BEFORE classify, which caused
+// reconcile() to resume at tokens after a crash, skipping classify entirely.
+// Fix (V2 Phase 0, 2026-06-17): moved tokens to its correct position AFTER assets.
+// Do not reorder without updating both this array AND the UMBAUPLAN §2.2 / §15.1.
 const PHASE_ORDER: PhaseName[] = [
   'extract',
-  'tokens',
   'classify',
   'assets',
+  'tokens',
   'design-system',
   'build',
   'qa',
