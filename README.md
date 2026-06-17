@@ -2,10 +2,11 @@
 
 > **Clone any live website to Elementor V3 — pixel-accurate, on any WordPress with the Novamira plugin.**
 
-[![Status](https://img.shields.io/badge/status-alpha-orange)]()
+[![Status](https://img.shields.io/badge/status-beta-yellow)]()
 [![License](https://img.shields.io/badge/license-MIT-blue)]()
 [![Node](https://img.shields.io/badge/node-%E2%89%A518-green)]()
-[![Tests](https://img.shields.io/badge/tests-534%20passing-brightgreen)]()
+[![Version](https://img.shields.io/badge/version-0.2.0-blue)]()
+[![Tests](https://img.shields.io/badge/tests-910%20passing-brightgreen)]()
 
 ---
 
@@ -111,32 +112,63 @@ Short version:
 
 ## Documentation
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) — module map, data flow, design decisions
+- [docs/V2-ARCHITECTURE.md](docs/V2-ARCHITECTURE.md) — **V2 module map, 12-phase data flow, V3 vs V4 schema**
+- [ARCHITECTURE.md](ARCHITECTURE.md) — V1 architecture (kept for historical reference)
 - [EXAMPLES.md](EXAMPLES.md) — common workflows and recipes
 - [TROUBLESHOOTING.md](TROUBLESHOOTING.md) — common errors and fixes
 - [FAQ.md](FAQ.md) — frequently asked questions
 - [CHANGELOG.md](CHANGELOG.md) — version history
 - [HANDOFF.md](HANDOFF.md) — detailed implementation log per phase
 
+## V2 Module Map (v0.2.0)
+
+```
+src/
+├── scraper/          # Phase 1: Playwright crawler (SPA-hydration, lazy-scroll)
+├── extractor/        # Phase 4: computed-styles + pseudo-state + custom-property + animation-property + background-image + font-loading
+├── classifier/       # Phase 5: pro-detector + widget-mapper (18 V3 + 14 Pro) + widget-degradation + widget-validator
+├── recon/            # Phase 3: mutation-observer + animation-events + state-capture + recon-runner (in-page IIFE + Playwright-bridge)
+├── builder/          # Phase 7: v3-section + v3-multi-column + v3-builder (Multi-Column + Inner-Sections + Responsive)
+├── analyzer/         # Phase 6: oklch-converter (sRGB↔Oklch) + token-extractor + token-resolver + theme-detector
+├── qa/               # Phase 8: 28 issue-types (8 V1 + 20 Phase 8) + batched-fix (max 4 types/round) + render-capture (60s timeout + 2 retries + mock fallback)
+├── orchestrator/     # Phase 9: manager-workflow (per-section loop) + phase-orchestrator (retry) + run-report (24 fields)
+├── mcp/              # Phase 10: mcp-adapter + phase10-session (capability-exchange + reconnect) + phase10-indirection (9 op-kinds + idempotency) + phase10-call-orchestrator (circuit-breaker + batch)
+└── cli/              # Phase 11: clone + dry-run + phase11-cli-flags (5 validation rules) + phase11-pipeline (6 stages) + phase11-e2e-mock (offline deterministisch)
+```
+
 ## Status
 
-**Beta — v0.1.0.** 12-phase plan complete. 534/534 unit tests passing, 0 TypeScript errors.
+**Beta — v0.2.0.** V2-Plan komplett durchgearbeitet (Phasen 0-11). **910/910 Tests grün, 0 TS-Errors.**
 
-What's working:
-- Playwright extraction (SPA hydration, lazy-scroll, computed styles, @keyframes, design tokens)
-- Style classifier + widget mapper + token resolver + responsive settings + section picker
-- Asset downloader (images, fonts, SVGs, favicons, OG images) + manifest builder
-- MCP adapter (session handshake, retry, indirection, V4 schema support)
-- Design system sync + V3/V4 builders + visual acceptance
-- Animation injector + WPCode snippet planner
-- Visual QA: strictness profiles, SSIM, issue detection (8 types), auto-fix loop, HTML reports
-- Interactive wizard (9 steps) + state-manager + resume + step-by-step pipeline
-- Build modes: dry-run, diff-only, incremental
-- Update checker + changelog generator
+What's working (v0.2.0):
+- **Phase 3 (Recon):** MutationObserver + WAAPI + CSS-Transition-Listener ersetzt V1's 250ms-Polling — schnelle Transitions (<100ms) werden erfasst, langsame Sites blockieren nicht mehr
+- **Phase 4 (Extractor):** 80 curated computed-style-props + pseudo-state-capture (:hover/:focus/:active) + custom-property-extractor (auto-detect :root/:host) + animation-property-extractor + background-image-parser (parens-respektierend) + font-loading-state (document.fonts API)
+- **Phase 5 (Classifier):** 14 Pro-Widgets (slider/accordion/tabs/counter/testimonial-carousel/price-table/animated-headline/progress-bar/forms/posts/share-buttons/gallery/image-box/icon-box) + Pro-Detection mit 6 Signal-Quellen + 7 Heuristik-Quellen + 3-stufige Degradation + Validator mit severity (error/warning/info)
+- **Phase 6 (Analyzer):** sRGB↔Oklch Voll-Pipeline (W3C/css-color-4) + oklch-Token-Extraction + Token-Resolver mit Source-Traceability (override>css-variable>extracted>fallback) + Theme-Detection (data-attr>class>media-query>light-default)
+- **Phase 7 (Builder):** V3-Multi-Column (1-6 columns + ratios + gap) + Inner-Sections + Responsive-Overrides + 5 SectionStructureTypes (full-width/boxed/content/multi-column/inner-section) + V1-Build preserved für Pipeline-Konsumenten
+- **Phase 8 (QA):** 28 Issue-Types (8 V1 + 20 Phase 8) + Batched-Auto-Fix (max 4 types/round, max rounds cap) + Render-Capture mit 60s-Timeout + 2-Retries + Exponential-Backoff + Mock-Fallback für WP-Down
+- **Phase 9 (Orchestrator):** Per-Section Loop mit 5 reconcile-state-kinds + 6 PHASE_IDs mit retry-loop + 24-Feld RunReport
+- **Phase 10 (MCP):** Capability-Exchange + Reconnect (exponential-backoff + jitter) + 9 BuilderOperationKinds mit Idempotency-Keys (sha256 für idempotent, timestamp+random für non-idempotent) + Circuit-Breaker (closed/open/half-open) + Batch-Scheduler (maxConcurrentPages)
+- **Phase 11 (CLI):** 5 Validation-Regeln für CLI-Flags + 6-Stage-Pipeline-Orchestrator + E2E-Mock-Layer (deterministisch für CI/offline)
 
 What's still in progress:
-- Live E2E against multiple WP targets (requires running Novamira plugin)
+- Live E2E gegen test4.nick-webdesign.de (Phase 12, braucht WP-MCP-Credentials + Playwright)
 - Performance optimization for very large pages (>50 sections)
+- npm publish v0.2.0
+
+## V1 → V2 Migration
+
+V1-Stand (commit `9bd78ab`) hatte **534 Tests / 5 Module-Pakete (scraper/extractor/classifier/builder/analyzer + qa + mcp)**. V2-Stand (commit `e4c0f47`) hat **910 Tests / 9 Modul-Erweiterungen**:
+- V1's `extractor/computed-styles.ts` (60 props) → Phase 4 (80 props + 5 Sub-Module)
+- V1's `classifier/widget-mapper.ts` (18 V3 widgets) → Phase 5 (+14 Pro widgets + detector + degradation + validator)
+- V1's `analyzer/design-token-extractor.ts` (RGB only) → Phase 6 (+oklch-converter + resolver + theme-detector)
+- V1's `qa/issue-detector.ts` (8 types) → Phase 8 (+20 types + batched-fix + render-capture)
+- V1's `orchestrator/manager.ts` (monolithisch) → Phase 9 (3 Module + per-section-loop + 24-field report)
+- V1's `mcp/mcp-adapter.ts` (einzelne Datei) → Phase 10 (+session + indirection + call-orchestrator)
+- NEU: `src/recon/` (Phase 3 — komplett neues Modul, ersetzt V1's 250ms-polling)
+- NEU: `src/cli/phase11-*` (Phase 11 — komplett neue CLI-Pipeline-Module)
+
+Honesty-Discipline: Alle 11 V2-Commits mit `git show --stat <hash>` verifiziert + `git status -sb` clean.
 
 ## License
 

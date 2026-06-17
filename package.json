@@ -81,7 +81,14 @@
     "website-cloner",
     "framer",
     "reverse-engineering",
-    "wp-cli"
+    "wp-cli",
+    "oklch",
+    "design-tokens",
+    "pixel-diff",
+    "pro-widget",
+    "auto-fix",
+    "mcp-adapter",
+    "circuit-breaker"
   ],
   "author": "Adilinu94",
   "repository": {
