@@ -19,7 +19,32 @@ export {
   type CuratedProperty,
   type WalkOptions,
 } from './computed-styles.js';
-export { detectSections, type DetectSectionsOptions } from './section-detector.js';
+export { detectSections, mergeSmallSections, areMergeable, DEFAULT_MERGE_THRESHOLD, type DetectSectionsOptions, type MergeThreshold } from './section-detector.js';
+export { planAdaptiveSamples, runAdaptiveScroll, type AdaptiveScrollOptions, type AdaptiveScrollResult } from './adaptive-scroll.js';
+export type {
+  PageSpec,
+  SectionSpec,
+  WidgetSpec,
+  SectionKind,
+  WidgetKind,
+  DesignTokensSnapshot,
+  TokenRef,
+} from './spec-schema.js';
+export { isPageSpec, emptyTokens } from './spec-schema.js';
+export {
+  buildPageSpec,
+  buildSectionSpec,
+  classifySectionKind,
+  type BuildSpecInput,
+  type ResolvedSection,
+} from './spec-builder.js';
+export {
+  runExtractPipeline,
+  preFlightScroll,
+  detectSourceFramework,
+  type ExtractPipelineOptions,
+  type ExtractPipelineResult,
+} from './extract-pipeline.js';
 export {
   discoverAnimations,
   buildCssBodyCollector,

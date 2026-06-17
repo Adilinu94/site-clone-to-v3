@@ -1,6 +1,23 @@
 /**
- * Public API for the Asset-Downloader module (Phase 4).
+ * Public API for the Asset-Downloader module (Phase 4) + Pre-Flight (V2 Phase 1).
  */
+
+export {
+  parseRobotsTxt,
+  pathMatches,
+  isAllowed as isRobotsAllowed,
+  fetchRobotsTxt,
+  robotsAllowed,
+  _resetRobotsCache,
+  type ParsedRobots,
+  type RobotsCheckOptions,
+} from './robots-check.js';
+
+export {
+  RateLimiter,
+  createDomainRateLimiter,
+  type RateLimiterOptions,
+} from './rate-limiter.js';
 
 export {
   downloadImages,

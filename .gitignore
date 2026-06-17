@@ -38,6 +38,16 @@ tmp/
 pipeline-outputs/
 .tmp-e2e/
 
+# Live-test research artifacts (per-target caches from real WP runs)
+.research/
+
+# E2E logs (ad-hoc test session logs)
+docs/e2e-logs/
+
+# Ad-hoc test fixtures (one-off scrape targets, not part of test suite)
+tests/fixtures/envyo-hero/
+tests/fixtures/source-sites/
+
 # IDE
 .vscode/
 .idea/
