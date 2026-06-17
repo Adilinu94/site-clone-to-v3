@@ -44,3 +44,72 @@ export {
   mode,
   type SpacingTokens,
 } from './spacing-extractor.js';
+
+// V2 Phase 6: oklch-Converter
+export {
+  rgbToOklch,
+  oklchToRgb,
+  oklchRoundTripDelta,
+  formatOklchCss,
+  parseOklch,
+  hexToRgb as oklchHexToRgb,
+  rgbToHex as oklchRgbToHex,
+  srgbToLinear,
+  linearToSrgb,
+  linearRgbToOklab,
+  oklabToLinearRgb,
+  oklabToOklch,
+  oklchToOklab,
+  clamp,
+  type Rgb,
+  type Oklab,
+  type Oklch,
+} from './oklch-converter.js';
+
+// V2 Phase 6: Token-Extractor (oklch-aware colors + shadows + radii + type-scale)
+export {
+  extractTokens,
+  extractOklchColorTokens,
+  extractShadowTokens,
+  extractRadiusTokens,
+  extractTypeScaleTokens,
+  detectTokenSource,
+  parseBoxShadow,
+  bucketize,
+  type ExtractedTokens,
+  type TokenExtractionOptions,
+  type OklchColorToken,
+  type ShadowToken,
+  type RadiusToken,
+  type TypeScaleToken,
+} from './token-extractor.js';
+
+// V2 Phase 6: Token-Resolver (semantic role → resolved hex/rgb/oklch + provenance)
+export {
+  resolveToken,
+  resolveAll,
+  resolvedHex,
+  resolvedRgb,
+  resolvedOklchCss,
+  sourceOf,
+  buildCustomCssForTokens,
+  normalizeRoleName,
+  findExtractedForRole,
+  type ResolvedToken,
+  type ResolverContext,
+  type TokenSource,
+} from './token-resolver.js';
+
+// V2 Phase 6: Theme-Detector (light/dark/auto)
+export {
+  detectTheme,
+  detectFromDataAttribute,
+  detectFromClassList,
+  detectFromMediaQuery,
+  buildThemeConditionalCss,
+  DEFAULT_THEME_ATTRIBUTES,
+  DEFAULT_DARK_CLASSES,
+  type ThemeMode,
+  type ThemeDetection,
+  type ThemeDetectorOptions,
+} from './theme-detector.js';
