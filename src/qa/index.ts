@@ -19,3 +19,5 @@ export * from './visual-diff.js';
 export * from './phase8-issue-types.js';
 export * from './phase8-batched-fix.js';
 export * from './phase8-render-capture.js';
+export * from './real-fixers.js';
+export * from './pixel-element-resolver.js';

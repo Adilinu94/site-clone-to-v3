@@ -55,6 +55,16 @@ import {
 import {
   runAcceptance,
 } from '../qa/acceptance.js';
+import {
+  runAutoFix,
+} from '../qa/auto-fix.js';
+import {
+  createRealFixers,
+  type McpCallFn,
+} from '../qa/real-fixers.js';
+import {
+  buildPixelElementResolver,
+} from '../qa/pixel-element-resolver.js';
 
 export interface PipelineOptions extends ExtractionOptions {
   outputDir: string;
@@ -71,6 +81,10 @@ export interface PipelineOptions extends ExtractionOptions {
   cloneUrl?: string;
   /** Minimum acceptable match score for QA acceptance (0–1, default 0.85). */
   qaMinScore?: number;
+  /** Enable Auto-Fix-Loop after QA (requires postId + mcpUrl). Default: false. */
+  qaAutoFix?: boolean;
+  /** Post-ID of the deployed Elementor page for Auto-Fix elementor-edit-element calls. */
+  postId?: number;
 }
 
 export type StageName = 'extract' | 'classify' | 'assets' | 'tokens' | 'build' | 'animations' | 'qa';
@@ -417,7 +431,7 @@ export async function runPipeline(
     });
   }
 
-  // Stage 7: qa (Phase 8) — Visual QA via pixel-diff + SSIM
+  // Stage 7: qa (Phase 8) — Visual QA via pixel-diff + SSIM + optional Auto-Fix loop
   if (!skip.has(7) && options.cloneUrl) {
     const { result, ms } = await time(async () => {
       const qaOutputDir = path.join(outputDir, 'qa');
@@ -431,22 +445,86 @@ export async function runPipeline(
     });
     const qaReport = result;
     artifacts['qa-report'] = path.join(outputDir, 'qa', 'acceptance-report.json');
+    const stageSummary: Record<string, unknown> = {
+      verdict: qaReport.verdict,
+      matchPercent: qaReport.matchPercent,
+      score: qaReport.score,
+      recommendations: qaReport.recommendations,
+    };
+    const outputPaths = [
+      path.join(outputDir, 'qa', 'acceptance-report.json'),
+      path.join(outputDir, 'qa', 'original.png'),
+      path.join(outputDir, 'qa', 'clone.png'),
+      path.join(outputDir, 'qa', 'diff.png'),
+    ];
+
+    // Auto-Fix-Loop (Phase 8-Lueckenschluss): requires postId + mcpUrl.
+    // Calls real MCP abilities via novamira/elementor-edit-element, novamira/execute-php,
+    // novamira/upload_asset, and PixelElementResolver from page-v3.json.
+    if (
+      options.qaAutoFix &&
+      qaReport.verdict !== 'pass' &&
+      options.postId !== undefined &&
+      options.mcpUrl
+    ) {
+      const autoFixMs = Date.now();
+      try {
+        const mcpAdapter = new McpAdapter({
+          baseUrl: options.mcpUrl,
+          authHeader: options.mcpAuth ? `Basic ${Buffer.from(options.mcpAuth).toString('base64')}` : '',
+        });
+        const mcpCallFn: McpCallFn = async (abilityName, parameters) => {
+          return mcpAdapter.executeAbility(abilityName, parameters);
+        };
+
+        const pageDataPath = path.join(outputDir, 'page-v3.json');
+        const resolver = await buildPixelElementResolver({
+          pageDataPath,
+          viewportWidth: 1440,
+          defaultSectionHeightPx: 600,
+        });
+
+        const fixers = createRealFixers({
+          mcp: mcpCallFn,
+          postId: options.postId!,
+          resolver,
+          dryRun: options.dryRun ?? false,
+          originalUrl: url,
+        });
+
+        const autoFixOutputDir = path.join(outputDir, 'qa', 'auto-fix');
+        const autoFixReport = await runAutoFix({
+          originalUrl: url,
+          cloneUrl: options.cloneUrl!,
+          outputDir: autoFixOutputDir,
+          strictness: 'pixel-perfect',
+          fixers,
+        });
+
+        artifacts['auto-fix-report'] = path.join(autoFixOutputDir, 'auto-fix-report.json');
+        outputPaths.push(path.join(autoFixOutputDir, 'auto-fix-report.json'));
+        stageSummary.autoFix = {
+          totalRounds: autoFixReport.totalRounds,
+          finalMatchPercent: autoFixReport.finalMatchPercent,
+          issuesFixed: autoFixReport.rounds.reduce((sum, r) => sum + r.issuesFixed, 0),
+          issuesSkipped: autoFixReport.rounds.reduce((sum, r) => sum + r.issuesSkipped, 0),
+          targetReached: autoFixReport.targetReached,
+        };
+        stageSummary.autoFixDurationMs = Date.now() - autoFixMs;
+      } catch (err) {
+        stageSummary.autoFixError = (err as Error).message ?? String(err);
+      }
+    } else if (options.qaAutoFix) {
+      stageSummary.autoFixNote =
+        'auto-fix requested but skipped — requires postId + mcpUrl';
+    }
+
     stages.push({
       name: 'qa',
       status: qaReport.verdict === 'fail' ? 'failed' : 'ok',
       durationMs: ms,
-      outputPaths: [
-        path.join(outputDir, 'qa', 'acceptance-report.json'),
-        path.join(outputDir, 'qa', 'original.png'),
-        path.join(outputDir, 'qa', 'clone.png'),
-        path.join(outputDir, 'qa', 'diff.png'),
-      ],
-      summary: {
-        verdict: qaReport.verdict,
-        matchPercent: qaReport.matchPercent,
-        score: qaReport.score,
-        recommendations: qaReport.recommendations,
-      },
+      outputPaths,
+      summary: stageSummary,
     });
   } else if (!skip.has(7)) {
     stages.push({

@@ -1,9 +1,10 @@
 # SITE-CLONE-TO-V3 — Handoff für nächste Session
 
-> **Stand:** 2026-06-16, 22:00 — Phasen 0-11 abgeschlossen
-> **Letzter verifizierter Commit auf `main`:** `7abaf8a` (Phase 10B+E e2e tests)
-> **Tests:** 534/534 grün, TS-clean (0 errors)
-> **Commits seit `origin/main`:** 17 ahead, PR-bereit
+> **Stand:** 2026-06-18, 09:50 — Phase 8 Lückenschluss: Real Auto-Fixer implementiert
+> **Letzter verifizierter Commit auf `main`:** `8b0df1f` (V2-Phase-1+2-Pipeline-Integration)
+> **Tests:** 928/928 grün, TS-clean (0 errors)
+> **Commits seit `origin/main`:** 13 ahead, gepusht
+> **Real-Fixer-Commit (in Vorbereitung):** siehe untracked/staged files
 
 ## TL;DR
 
@@ -31,6 +32,51 @@ Laut `BAUPLAN-SITE-CLONE-TO-V3.md`:
 - **Phase 9** — Wizard-Integration (interaktive CLI mit Inquirer)
 - **Phase 10** — Tests (E2E gegen echte WP-Targets)
 - **Phase 11** — Docs + npm-Package + Veröffentlichung
+
+## Phase-8-Real-Fixer-Lückenschluss (2026-06-18)
+
+**Phase 8 hatte Placeholder-Fixer** (`buildDefaultFixers()`) — alle gaben `ok: false` zurück mit Text wie "requires live MCP context". Diese sind jetzt durch echte MCP-Aufrufe ersetzt.
+
+**Neue Dateien:**
+- `src/qa/real-fixers.ts` (~270 LoC) — `createRealFixers({ mcp, postId, resolver, dryRun? })` Factory mit 6 echten Fixern:
+  | Issue-Type | MCP-Action | Element-Setting |
+  |---|---|---|
+  | `color-mismatch` | `novamira/elementor-edit-element` | `_background_color` |
+  | `font-missing` | `novamira/execute-php` (register Google via theme_mod) | `ogf_load_fonts` |
+  | `layout-shift` | `novamira/elementor-edit-element` | `padding`/`margin` reset |
+  | `image-broken` | `novamira/upload_asset` + `novamira/elementor-edit-element` | `image.url` |
+  | `size-mismatch` | `novamira/elementor-edit-element` | `width`/`height` aus Region |
+  | `animation-inactive` | `novamira/execute-php` (wpcode-Snippet mit `@keyframes`) | `_wpcode_code` meta |
+
+- `src/qa/pixel-element-resolver.ts` (~120 LoC) — `PixelElementResolver` mappt Pixel-Region (y/x) → `sectionId` + `widgetId` aus `page-v3.json`:
+  - Section-Y-Spans werden aus `_min_height`/`height`-Settings berechnet (Default 600px).
+  - Bei fehlender Section oder leerem PageData: `resolve()` gibt `null` → Fixer markiert Issue als "no element mapped" (statt Stub-ok:false).
+  - `colorIdLookup(hex)` Hook für späteres Elementor-V3-Global-Color-Mapping.
+
+**Pipeline-Integration (`src/analysis/pipeline.ts` Stage 7):**
+- Neue Options: `qaAutoFix?: boolean`, `postId?: number`.
+- Wenn `qaAutoFix=true` + `cloneUrl` + `postId` + `mcpUrl`: nach Acceptance-Test läuft `runAutoFix({ strictness: 'pixel-perfect', fixers: createRealFixers(...) })`.
+- Output: `<outputDir>/qa/auto-fix/auto-fix-report.json` mit `totalRounds`, `finalMatchPercent`, `issuesFixed`, `targetReached`.
+- Bei DRY-RUN: alle MCP-Calls werden nur beschrieben (`[DRY-RUN] Would call ...`), kein echter Side-Effect.
+
+**Honesty-Discipline:**
+- Wenn `resolver.resolve()` `null` zurückgibt (z.B. weil `page-v3.json` keine Section für die y-Region hat), wird der Fix als `skipped` markiert mit Diagnose statt als "erfolgreich" geloggt.
+- Wenn MCP wirft (z.B. Auth-Fehler), wird `ok: false` mit Fehlermeldung zurückgegeben.
+- DRY-RUN-Modus zeigt den vollen MCP-Call-Descriptor im Log für Reproduzierbarkeit.
+
+**Tests:** 18 neue Tests in `tests/unit/qa/real-fixers.test.ts` (13) und `tests/unit/qa/pixel-element-resolver.test.ts` (5).
+- 928/928 Tests grün, TS-clean (0 errors).
+- dist/qa/real-fixers.js + dist/qa/pixel-element-resolver.js gebaut.
+
+**Live-E2E-Voraussetzung (für echten Auto-Fix-Lauf):**
+- Voraussetzungen: `cloneUrl` (deployed Seite), `postId` (Elementor-Seiten-ID), `mcpUrl`/`mcpAuth`, `page-v3.json` im Output-Dir.
+- CLI-Aufruf: `node dist/cli/clone-v3.js clone --url <source> --target <profile> --no-wizard --clone-url <deployed> --output ./research/<slug>`
+- Aktuell: CLI-`clone` unterstützt `--clone-url`, aber `--post-id` muss noch durchgereicht werden (TODO PipelineOptions → CLI-Mapping).
+
+**Ehrliche Erkenntnis (2026-06-18 Live-E2E gegen test4):**
+- V2-Pipeline läuft alle 7 Stages durch mit `node dist/cli/clone-v3.js clone --url https://test4.nick-webdesign.de --no-wizard --dry-run --auto-pick-sections --output ./tmp`.
+- 910 Tests grün vor Fixer-Implementierung (jetzt 928).
+- Befund: test4 ist Test-Stub-Page mit nur 1 `<main>`-Section, 0 `<section>`-Tags, 1 Bild, 1 Button — V2-Section-Detection funktioniert korrekt, test4 hat einfach keine Multi-Section-DOM. Für echten Pixel-Perfekt-Beweis ist envyo.de (9 Sections, 11 Widgets) der bessere E2E-Target.
 
 ## Phase-7-Details
 
