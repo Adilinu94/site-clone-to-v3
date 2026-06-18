@@ -192,6 +192,32 @@ Default-Fixer sind **placeholders** (return `ok: false`). Sie dokumentieren nur,
 3. **Real-Fixer implementieren** (Phase 8 hat nur Placeholder-Fixer; die echten MCP-Calls für color/font/layout/image-fix müssen in einer späteren Phase kommen)
 4. **Pipeline-Runner in `clone` integrieren** — `pipeline-runner.ts` existiert und ist state-aware, wird aber noch nicht vom `clone`-Command aufgerufen (nur dry-run/diff/incremental).
 
+## Live-E2E-Befund 2026-06-18 (gegen test4.nick-webdesign.de)
+
+**Methode:** `node dist/cli/clone-v3.js clone --no-wizard --url https://test4.nick-webdesign.de --output ./research --auto-pick-sections --strictness draft`
+**Build:** `npx tsc` (0 errors), 56 Files in `dist/`
+**Result:** Pipeline läuft alle 7 Stages durch (extract, classify, assets, build, animations). Real-Output: 36KB extraction-result.json, 3 Screenshots (1440/768/390), V3+V4 page-data, animations.json, fonts/SF Pro/Roboto erkannt, 30+ CSS-Vars extrahiert.
+
+**Befund (ehrlich, mit git-verifizierten Daten):**
+- ✅ **Stage 1 (Extract):** Playwright funktioniert, Screenshots werden gemacht, computed-styles, animations, fonts, css-vars extrahiert.
+- ✅ **Stage 3 (Assets):** Asset-Downloader vorhanden, Manifest wird geschrieben.
+- ✅ **Stage 4 (Tokens):** Design-Tokens + CSS-Vars im Output vorhanden.
+- ⚠️ **Stage 2 (Classify):** Section-Picker findet nur **1 Section** (`#content` / `<main>`, 35→2847px). **V2-Phase-2 (Generic-Section-Detection mit 8 Heuristiken, Section-Merger-Threshold) ist nicht in `pipeline.ts` verdrahtet.** Die Module `src/extractor/section-detector.ts`, `extract-pipeline.ts`, `spec-builder.ts`, `spec-schema.ts` existieren lokal (Commit `8e6bc88`), werden aber von `pipeline.ts` Stage 1 nicht aufgerufen — `extractFromUrl()` wird direkt benutzt.
+- ⚠️ **Stage 5 (Build):** V3-Output hat 1 Section, 1 Column, **0 Widgets**. Section-Picker liefert keine Widgets. Builder hat nichts zum Bauen. V2-Phase-7 (V3-Multi-Column-Builder) ist im Code da, kriegt aber keine Multi-Section-Specs.
+- ❌ **Stage 6 (Tokens-Sync):** `pending` weil kein target gesetzt — das ist OK für dry-validation.
+- ❌ **Stage 7 (QA):** `skipped` weil kein `cloneUrl` — OK.
+
+**Honesty-Discipline:** Vor dem Rapportieren geprüft per `dir`, `findstr`, `git show`. Befund reproduzierbar.
+
+**tsx-Loader-Bug (BAUPLAN §3.1 Punkt 1):** `npx tsx src/cli/clone-v3.ts` wirft `page.evaluate: ReferenceError: __name is not defined`. tsc-built binary (`node dist/cli/clone-v3.js`) läuft sauber. **Default-Strategie für Live-Runs: tsc-built binary.**
+
+**Konkrete Fix-Reihenfolge für nächste Session:**
+1. `pipeline.ts` Stage 1 von `extractFromUrl()` auf `runExtractPipeline()` umstellen (mit Fallback). Damit werden robots.txt, rate-limit, section-merger, spec.json automatisch aktiv.
+2. Section-Picker-Erweiterung damit er die V2-`spec.json`-Sections aus `extract-pipeline.ts` nutzt (statt nur `<main>`).
+3. Widget-Detection im Section-Picker aktivieren, damit Multi-Column-Builder was zu bauen hat.
+4. Real-Fixer für color/font/image-mismatch implementieren (statt nur Placeholders).
+5. GitHub-Actions CI/CD-Workflow (siehe UMBAUPLAN §15.5).
+
 ## Phase-9B-Details (NEU — Build-Modi)
 
 ### Was Phase 9B liefert

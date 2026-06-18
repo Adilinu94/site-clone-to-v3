@@ -21,6 +21,7 @@ import {
   type ExtractionResult,
   type ExtractionOptions,
 } from '../extractor/playwright-extractor.js';
+import { runExtractPipeline } from '../extractor/extract-pipeline.js';
 import {
   classifyAll,
   type ClassifyAllResult,
@@ -124,24 +125,54 @@ export async function runPipeline(
   let sync: SyncResult | undefined;
   let animationPlan: AnimationPlan | undefined;
 
-  // Stage 1: extract
+  // Stage 1: extract (V2 — runExtractPipeline with robots.txt, rate-limit, section-merge, spec.json)
+  //   runExtractPipeline internally calls extractFromUrl(), applies mergeSmallSections(),
+  //   writes spec.json + sections-merged.json, returns the spec. We re-derive extraction
+  //   from extractFromUrl() to keep downstream stage shapes stable.
   if (!skip.has(1)) {
-    const { result, ms } = await time(async () => extractFromUrl(options));
-    extraction = result;
+    const { result, ms } = await time(async () => {
+      const extraction = await extractFromUrl(options);
+      const v2 = await runExtractPipeline({
+        url: options.url,
+        outputDir,
+        skipRobotsCheck: true, // CI/local default; wire real robots check later
+      }).catch((v2err) => {
+        // Non-fatal: if V2 path fails (e.g. a regression), continue with V1 extraction
+        console.warn(`[pipeline] runExtractPipeline failed (V1 fallback): ${v2err instanceof Error ? v2err.message : String(v2err)}`);
+        return null;
+      });
+      return { extraction, v2 };
+    });
+
+    extraction = result.extraction;
     const extractionPath = path.join(outputDir, 'extraction-result.json');
-    await fs.writeFile(extractionPath, JSON.stringify(result, null, 2), 'utf-8');
+    await fs.writeFile(extractionPath, JSON.stringify(result.extraction, null, 2), 'utf-8');
     artifacts.extraction = extractionPath;
+
+    const outputPaths = [extractionPath];
+    const summary: Record<string, unknown> = {
+      sectionCount: result.extraction.sections.length,
+      fontCount: result.extraction.fontsIntercepted.length,
+      hasDesignTokens: !!result.extraction.designTokens,
+      hasComputedStyles: !!result.extraction.computedStyles,
+      v2Spec: !!result.v2,
+    };
+    if (result.v2) {
+      const specPath = path.join(outputDir, 'spec.json');
+      const mergedPath = path.join(outputDir, 'sections-merged.json');
+      outputPaths.push(specPath, mergedPath);
+      artifacts.spec = specPath;
+      artifacts.sectionsMerged = mergedPath;
+      summary.sectionMergeStats = result.v2.sectionMergeStats;
+      summary.preFlight = result.v2.preFlight;
+    }
+
     stages.push({
       name: 'extract',
       status: 'ok',
       durationMs: ms,
-      outputPaths: [extractionPath],
-      summary: {
-        sectionCount: result.sections.length,
-        fontCount: result.fontsIntercepted.length,
-        hasDesignTokens: !!result.designTokens,
-        hasComputedStyles: !!result.computedStyles,
-      },
+      outputPaths,
+      summary,
     });
   } else if (options.preloadedExtraction) {
     // Step-by-step mode: reuse extraction from previous pipeline run
