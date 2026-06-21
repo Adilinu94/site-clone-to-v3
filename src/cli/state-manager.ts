@@ -47,6 +47,8 @@ export interface CloneState {
     cloneUrl?: string;
     /** WordPress post ID of the deployed clone page for Auto-Fix MCP calls. */
     postId?: number;
+    /** Enable QA auto-fix loop after pixel-diff (requires cloneUrl + postId + MCP). */
+    qaAutoFix?: boolean;
   };
 }
 

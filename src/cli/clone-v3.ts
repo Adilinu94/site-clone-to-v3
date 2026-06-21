@@ -69,6 +69,7 @@ program
   .option('--incremental', 'Only rebuild changed sections (requires previous build)', false)
   .option('--clone-url <url>', 'Deployed clone page URL for visual QA stage (e.g. https://solar.local/?p=1234)')
   .option('--post-id <id>', 'WordPress post ID of the deployed clone page — required for QA auto-fix MCP calls')
+  .option('--qa-auto-fix', 'Enable auto-fix loop after QA diff (requires --clone-url + --post-id + MCP target)', false)
   .action(async (url: string | undefined, options) => {
     console.log(chalk.cyan(`[clone-v3 v${PACKAGE_VERSION}] full pipeline`));
     try {
@@ -90,6 +91,7 @@ program
         interactive: options.wizard !== false,
         cloneUrl: options.cloneUrl,
         postId: options.postId !== undefined ? parseInt(options.postId as string, 10) : undefined,
+        qaAutoFix: !!options.qaAutoFix,
       };
       const result = await runWizard(wizardOpts);
       const researchDir = `${wizardOpts.output}/${result.state.hostname}`;

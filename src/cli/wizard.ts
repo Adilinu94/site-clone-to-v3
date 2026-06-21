@@ -48,6 +48,8 @@ export interface WizardOptions {
   cloneUrl?: string;
   /** WordPress post ID of the deployed clone page for Auto-Fix MCP calls. */
   postId?: number;
+  /** Enable QA auto-fix loop after pixel-diff (requires cloneUrl + postId + MCP target). */
+  qaAutoFix?: boolean;
 }
 
 export interface WizardResult {
@@ -59,6 +61,8 @@ export interface WizardResult {
   cloneUrl?: string;
   /** WordPress post ID of the deployed clone page for Auto-Fix MCP calls. */
   postId?: number;
+  /** Enable QA auto-fix loop after pixel-diff. */
+  qaAutoFix?: boolean;
 }
 
 export interface LoadedState {
@@ -205,11 +209,12 @@ export async function runWizard(opts: WizardOptions): Promise<WizardResult> {
     }
   }
 
-  // Wire cloneUrl + postId into state for QA stage
+  // Wire cloneUrl + postId + qaAutoFix into state for QA stage
   if (opts.cloneUrl) state.options.cloneUrl = opts.cloneUrl;
   if (opts.postId !== undefined) state.options.postId = opts.postId;
+  if (opts.qaAutoFix) state.options.qaAutoFix = opts.qaAutoFix;
 
-  return { state, resumeMode, dryRun: false, interactive: opts.interactive, cloneUrl: opts.cloneUrl, postId: opts.postId };
+  return { state, resumeMode, dryRun: false, interactive: opts.interactive, cloneUrl: opts.cloneUrl, postId: opts.postId, qaAutoFix: opts.qaAutoFix };
 }
 
 async function buildFreshState(opts: WizardOptions, url: string): Promise<CloneState> {
@@ -221,5 +226,6 @@ async function buildFreshState(opts: WizardOptions, url: string): Promise<CloneS
     strictness: opts.strictness ?? 'balanced',
     cloneUrl: opts.cloneUrl,
     postId: opts.postId,
+    qaAutoFix: opts.qaAutoFix,
   });
 }

@@ -11,8 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **`--post-id <id>` CLI flag** on the `clone` command: threads the WordPress post ID of the deployed clone page through `WizardOptions.postId` → `CloneState.options.postId` → `PipelineOptions.postId`. Closes the HANDOFF TODO: Auto-Fix MCP calls (`createRealFixers`) now receive `postId` from the CLI without requiring manual code edits. Use together with `--clone-url` to enable the full QA auto-fix loop: `clone-v3 clone --url <src> --clone-url <deployed> --post-id <id>`.
+- **`--qa-auto-fix` CLI flag** on the `clone` command: activates the Auto-Fix iteration loop after the QA pixel-diff stage. Requires `--clone-url` + `--post-id` + a configured MCP target. Threads through `WizardOptions.qaAutoFix` → `CloneState.options.qaAutoFix` → `PipelineOptions.qaAutoFix`. Full invocation: `clone-v3 clone --url <src> --target solar-local --clone-url <deployed> --post-id <id> --qa-auto-fix`.
 - **`.github/workflows/ci.yml`**: GitHub Actions CI with three jobs — `typecheck` (tsc --noEmit), `test` (Vitest unit, Node 22), `lint` (ESLint with `|| true` until legacy warnings are resolved). Uses `actions/setup-node@v4` with npm cache.
-- **`CloneState.options.postId?: number`** in `state-manager.ts` — persists the post ID across CLI sessions for resume support.
+- **`CloneState.options.postId?: number`** and **`CloneState.options.qaAutoFix?: boolean`** in `state-manager.ts` — persists both across CLI sessions for resume support.
 
 ---
 
