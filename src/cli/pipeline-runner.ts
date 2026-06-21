@@ -86,7 +86,7 @@ export interface PipelineRunResult {
 export async function runWizardPipeline(
   wizardResult: WizardResult,
 ): Promise<PipelineRunResult> {
-  const { state, resumeMode, interactive, cloneUrl } = wizardResult;
+  const { state, resumeMode, interactive, cloneUrl, postId } = wizardResult;
   const stateFile = stateFileFor(state.outputDir, state.hostname);
   const outputDir = `${state.outputDir}/${state.hostname}`;
 
@@ -109,7 +109,7 @@ export async function runWizardPipeline(
 
   if (resumeMode || !interactive) {
     // Resume or non-interactive: run all remaining stages in one shot
-    return runPhase(state, stateFile, outputDir, skipStages, cloneUrl);
+    return runPhase(state, stateFile, outputDir, skipStages, cloneUrl, postId);
   }
 
   // ─────────────── Interactive: two-phase step-by-step ───────────────
@@ -117,7 +117,7 @@ export async function runWizardPipeline(
   // Phase 1: Extract + Classify (stages 1-2)
   console.log(chalk.bold.magenta('╭── Phase 1 of 2: Extract + Classify ──╮\n'));
   const phase1Skip = new Set([...skipStages, 3, 4, 5, 6, 7]);
-  const phase1 = await runPhase(state, stateFile, outputDir, phase1Skip, cloneUrl);
+  const phase1 = await runPhase(state, stateFile, outputDir, phase1Skip, cloneUrl, postId);
   const phase1Result = phase1.pipelineResult;
 
   if (!phase1Result?.extraction) {
@@ -155,6 +155,7 @@ export async function runWizardPipeline(
     preloadedExtraction: phase1Result.extraction,
     preloadedClassification: filteredClassification,
     cloneUrl: cloneUrl ?? state.options.cloneUrl,
+    postId: postId ?? state.options.postId,
   });
 
   // Update state from phase 2 stages
@@ -212,6 +213,7 @@ async function runPhase(
   outputDir: string,
   skipStages: Set<number>,
   cloneUrl?: string,
+  postId?: number,
 ): Promise<PipelineRunResult> {
   let pipelineResult: PipelineResult;
   try {
@@ -222,6 +224,7 @@ async function runPhase(
       syncToMcp: !!state.options.target,
       skipStages: skipStages.size > 0 ? [...skipStages] : undefined,
       cloneUrl: cloneUrl ?? state.options.cloneUrl,
+      postId: postId ?? state.options.postId,
     });
   } catch (err) {
     console.error(chalk.red(`\n✗ Pipeline failed: ${err instanceof Error ? err.message : err}`));

@@ -45,6 +45,8 @@ export interface CloneState {
     strictness: 'draft' | 'balanced' | 'pixel-perfect';
     /** Deployed clone page URL for QA stage (e.g. https://solar.local/?p=1234). */
     cloneUrl?: string;
+    /** WordPress post ID of the deployed clone page for Auto-Fix MCP calls. */
+    postId?: number;
   };
 }
 

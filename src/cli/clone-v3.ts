@@ -68,6 +68,7 @@ program
   .option('--diff-only', 'Compare against existing V3 page, do not build', false)
   .option('--incremental', 'Only rebuild changed sections (requires previous build)', false)
   .option('--clone-url <url>', 'Deployed clone page URL for visual QA stage (e.g. https://solar.local/?p=1234)')
+  .option('--post-id <id>', 'WordPress post ID of the deployed clone page — required for QA auto-fix MCP calls')
   .action(async (url: string | undefined, options) => {
     console.log(chalk.cyan(`[clone-v3 v${PACKAGE_VERSION}] full pipeline`));
     try {
@@ -88,6 +89,7 @@ program
         output: options.output ?? './research',
         interactive: options.wizard !== false,
         cloneUrl: options.cloneUrl,
+        postId: options.postId !== undefined ? parseInt(options.postId as string, 10) : undefined,
       };
       const result = await runWizard(wizardOpts);
       const researchDir = `${wizardOpts.output}/${result.state.hostname}`;

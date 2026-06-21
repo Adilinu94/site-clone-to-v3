@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Added
+- **`--post-id <id>` CLI flag** on the `clone` command: threads the WordPress post ID of the deployed clone page through `WizardOptions.postId` → `CloneState.options.postId` → `PipelineOptions.postId`. Closes the HANDOFF TODO: Auto-Fix MCP calls (`createRealFixers`) now receive `postId` from the CLI without requiring manual code edits. Use together with `--clone-url` to enable the full QA auto-fix loop: `clone-v3 clone --url <src> --clone-url <deployed> --post-id <id>`.
+- **`.github/workflows/ci.yml`**: GitHub Actions CI with three jobs — `typecheck` (tsc --noEmit), `test` (Vitest unit, Node 22), `lint` (ESLint with `|| true` until legacy warnings are resolved). Uses `actions/setup-node@v4` with npm cache.
+- **`CloneState.options.postId?: number`** in `state-manager.ts` — persists the post ID across CLI sessions for resume support.
+
+---
+
 ## [0.2.0] — 2026-06-17 — V2-Plan komplett
 
 V2-Plan (UMBAUPLAN-V3-PIXEL-PERFEKT) komplett durchgearbeitet. 11 neue Commits seit v0.1.0. **910/910 Tests grün, 0 TS-Errors.**

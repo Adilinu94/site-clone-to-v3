@@ -46,6 +46,8 @@ export interface WizardOptions {
   targets?: TargetOption[];
   /** Deployed clone page URL for QA stage (e.g. https://solar.local/?p=1234). */
   cloneUrl?: string;
+  /** WordPress post ID of the deployed clone page for Auto-Fix MCP calls. */
+  postId?: number;
 }
 
 export interface WizardResult {
@@ -55,6 +57,8 @@ export interface WizardResult {
   interactive: boolean;
   /** Deployed clone page URL for QA stage. */
   cloneUrl?: string;
+  /** WordPress post ID of the deployed clone page for Auto-Fix MCP calls. */
+  postId?: number;
 }
 
 export interface LoadedState {
@@ -201,10 +205,11 @@ export async function runWizard(opts: WizardOptions): Promise<WizardResult> {
     }
   }
 
-  // Wire cloneUrl into state for QA stage
+  // Wire cloneUrl + postId into state for QA stage
   if (opts.cloneUrl) state.options.cloneUrl = opts.cloneUrl;
+  if (opts.postId !== undefined) state.options.postId = opts.postId;
 
-  return { state, resumeMode, dryRun: false, interactive: opts.interactive, cloneUrl: opts.cloneUrl };
+  return { state, resumeMode, dryRun: false, interactive: opts.interactive, cloneUrl: opts.cloneUrl, postId: opts.postId };
 }
 
 async function buildFreshState(opts: WizardOptions, url: string): Promise<CloneState> {
@@ -215,5 +220,6 @@ async function buildFreshState(opts: WizardOptions, url: string): Promise<CloneS
     fonts: opts.fonts ?? 'auto',
     strictness: opts.strictness ?? 'balanced',
     cloneUrl: opts.cloneUrl,
+    postId: opts.postId,
   });
 }
