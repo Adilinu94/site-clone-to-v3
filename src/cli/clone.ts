@@ -9,6 +9,7 @@ interface CliArgs {
   mcpUrl?: string;
   mcpAuth?: string;
   stages?: number[];
+  postId?: number;
   help?: boolean;
 }
 
@@ -27,6 +28,7 @@ Options:
   --sync-to-mcp         Push design tokens to WordPress via MCP
   --mcp-url <url>       MCP endpoint URL (default: Novamira-adrianv2 default)
   --mcp-auth <user:pass> Basic auth for MCP
+  --post-id <id>        Elementor post ID to inject into (auto-activates --sync-to-mcp)
   --stages <n,n,...>    Run only these stages (1=extract, 2=classify, 3=assets, 4=tokens, 5=build, 6=animations)
 
 Examples:
@@ -66,6 +68,9 @@ function parseArgs(argv: string[]): CliArgs {
       case '--mcp-auth':
         args.mcpAuth = argv[++i];
         break;
+      case '--post-id':
+        args.postId = parseInt(argv[++i], 10);
+        break;
       case '--stages':
         args.stages = (argv[++i] ?? '')
           .split(',')
@@ -91,9 +96,10 @@ async function main(): Promise<void> {
     url: args.url,
     outputDir,
     dryRun: args.command === 'dry-run',
-    syncToMcp: args.syncToMcp,
+    syncToMcp: args.syncToMcp ?? (args.postId !== undefined),
     mcpUrl: args.mcpUrl,
     mcpAuth: args.mcpAuth,
+    postId: args.postId,
     skipStages: args.stages
       ? [1, 2, 3, 4, 5, 6].filter((n) => !args.stages!.includes(n))
       : undefined,

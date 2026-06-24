@@ -65,6 +65,10 @@ import {
 import {
   buildPixelElementResolver,
 } from '../qa/pixel-element-resolver.js';
+import {
+  pushToWordPress,
+  type WpPushResult,
+} from '../mcp/wp-push.js';
 
 export interface PipelineOptions extends ExtractionOptions {
   outputDir: string;
@@ -109,6 +113,7 @@ export interface PipelineResult {
   assetManifest?: AssetManifest;
   sync?: SyncResult;
   animationPlan?: AnimationPlan;
+  wpPush?: WpPushResult;
   artifacts: Record<string, string>;
 }
 
@@ -138,6 +143,7 @@ export async function runPipeline(
   let assetManifest: AssetManifest | undefined;
   let sync: SyncResult | undefined;
   let animationPlan: AnimationPlan | undefined;
+  let wpPush: WpPushResult | undefined;
 
   // Stage 1: extract (V2 — runExtractPipeline with robots.txt, rate-limit, section-merge, spec.json)
   //   runExtractPipeline internally calls extractFromUrl(), applies mergeSmallSections(),
@@ -389,7 +395,26 @@ export async function runPipeline(
       await writeV4Plan(v4Plan, v4Path);
       artifacts['v4-build'] = v4Path;
 
-      return { v3Path, v4Path, v4Plan };
+      // Stage 5.5: WP push — inject V3 tree via elementor-inject-calibrated-page
+      let pushResult: WpPushResult | undefined;
+      if (options.postId !== undefined && options.mcpUrl) {
+        const mcp = new McpAdapter({
+          baseUrl: options.mcpUrl,
+          authHeader: options.mcpAuth
+            ? `Basic ${Buffer.from(options.mcpAuth).toString('base64')}`
+            : '',
+        });
+        pushResult = await pushToWordPress(mcp, v3Data.content, {
+          postId: options.postId,
+          title: v3Data.title,
+          status: v3Data.status,
+          pageTemplate: 'elementor_canvas',
+          dryRun: options.dryRun,
+        });
+        wpPush = pushResult;
+      }
+
+      return { v3Path, v4Path, v4Plan, pushResult };
     });
 
     stages.push({
@@ -401,6 +426,9 @@ export async function runPipeline(
         sectionCount: result.v4Plan.summary.sectionCount,
         widgetCount: result.v4Plan.summary.widgetCount,
         classCount: result.v4Plan.summary.classes.length,
+        wpPush: result.pushResult
+          ? { postId: result.pushResult.postId, permalink: result.pushResult.permalink, created: result.pushResult.created }
+          : 'skipped (no --post-id or --mcp-url)',
       },
     });
   }
@@ -547,6 +575,7 @@ export async function runPipeline(
     assetManifest,
     sync,
     animationPlan,
+    wpPush,
     artifacts,
   };
 }
