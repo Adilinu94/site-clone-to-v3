@@ -10,6 +10,7 @@ interface CliArgs {
   mcpAuth?: string;
   stages?: number[];
   postId?: number;
+  extractor?: 'local' | 'browserbase';
   help?: boolean;
 }
 
@@ -29,6 +30,7 @@ Options:
   --mcp-url <url>       MCP endpoint URL (default: Novamira-adrianv2 default)
   --mcp-auth <user:pass> Basic auth for MCP
   --post-id <id>        Elementor post ID to inject into (auto-activates --sync-to-mcp)
+  --extractor <mode>    Browser backend: local (default) | browserbase (cloud CDP)
   --stages <n,n,...>    Run only these stages (1=extract, 2=classify, 3=assets, 4=tokens, 5=build, 6=animations)
 
 Examples:
@@ -71,6 +73,15 @@ function parseArgs(argv: string[]): CliArgs {
       case '--post-id':
         args.postId = parseInt(argv[++i], 10);
         break;
+      case '--extractor': {
+        const val = argv[++i];
+        if (val !== 'local' && val !== 'browserbase') {
+          console.error(`Unknown extractor "${val}". Use: local | browserbase`);
+          process.exit(1);
+        }
+        args.extractor = val;
+        break;
+      }
       case '--stages':
         args.stages = (argv[++i] ?? '')
           .split(',')
@@ -100,6 +111,7 @@ async function main(): Promise<void> {
     mcpUrl: args.mcpUrl,
     mcpAuth: args.mcpAuth,
     postId: args.postId,
+    extractor: args.extractor,
     skipStages: args.stages
       ? [1, 2, 3, 4, 5, 6].filter((n) => !args.stages!.includes(n))
       : undefined,

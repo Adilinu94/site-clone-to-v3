@@ -89,6 +89,12 @@ export interface PipelineOptions extends ExtractionOptions {
   qaAutoFix?: boolean;
   /** Post-ID of the deployed Elementor page for Auto-Fix elementor-edit-element calls. */
   postId?: number;
+  /**
+   * Browser backend for Stage 1 extraction.
+   * 'local'      — Playwright chromium.launch() (default, requires local Chrome)
+   * 'browserbase' — Browserbase cloud CDP session (requires BROWSERBASE_API_KEY)
+   */
+  extractor?: 'local' | 'browserbase';
 }
 
 export type StageName = 'extract' | 'classify' | 'assets' | 'tokens' | 'build' | 'animations' | 'qa';
@@ -151,7 +157,9 @@ export async function runPipeline(
   //   from extractFromUrl() to keep downstream stage shapes stable.
   if (!skip.has(1)) {
     const { result, ms } = await time(async () => {
-      const extraction = await extractFromUrl(options);
+      const extraction = options.extractor === 'browserbase'
+        ? await (await import('../extractor/browserbase-extractor.js')).extractViaCloud(options.url, options)
+        : await extractFromUrl(options);
       const v2 = await runExtractPipeline({
         url: options.url,
         outputDir,
