@@ -30,6 +30,7 @@ import {
 import { writeV3PageData, buildV3PageData } from '../builder/v3-builder.js';
 import { writeV4Plan, buildV4Plan } from '../builder/v4-builder.js';
 import { syncTokens, type SyncResult } from './token-sync.js';
+import { syncFontsToKit, type FontKitResult } from './font-kit-bridge.js';
 import { McpAdapter } from '../mcp/mcp-adapter.js';
 import {
   buildAnimationPlan,
@@ -118,6 +119,7 @@ export interface PipelineResult {
   classification?: ClassifyResult;
   assetManifest?: AssetManifest;
   sync?: SyncResult;
+  fontKit?: FontKitResult;
   animationPlan?: AnimationPlan;
   wpPush?: WpPushResult;
   artifacts: Record<string, string>;
@@ -148,6 +150,7 @@ export async function runPipeline(
   let classification: ClassifyAllResult | undefined;
   let assetManifest: AssetManifest | undefined;
   let sync: SyncResult | undefined;
+  let fontKit: FontKitResult | undefined;
   let animationPlan: AnimationPlan | undefined;
   let wpPush: WpPushResult | undefined;
 
@@ -375,6 +378,16 @@ export async function runPipeline(
     });
     sync = result;
     artifacts.sync = result.artifactPath;
+
+    // Font-to-Kit Bridge: auto-sync intercepted fonts into Kit typography
+    if (extraction.fontsIntercepted.length > 0) {
+      const mcp = new McpAdapter({
+        baseUrl: options.mcpUrl ?? 'https://test4.nick-webdesign.de/wp-json/mcp/novamira',
+        authHeader: options.mcpAuth ? `Basic ${Buffer.from(options.mcpAuth).toString('base64')}` : '',
+      });
+      fontKit = await syncFontsToKit(extraction.fontsIntercepted, mcp, { dryRun: options.dryRun });
+    }
+
     stages.push({
       name: 'tokens',
       status: 'ok',
@@ -385,6 +398,8 @@ export async function runPipeline(
         newClasses: result.newClasses.length,
         reusedVariables: result.reusedVariables,
         cacheHits: result.cacheHits,
+        fontsAdded: fontKit?.added.length ?? 0,
+        fontsSkipped: fontKit?.skipped.length ?? 0,
       },
     });
   }
@@ -582,6 +597,7 @@ export async function runPipeline(
     classification,
     assetManifest,
     sync,
+    fontKit,
     animationPlan,
     wpPush,
     artifacts,
