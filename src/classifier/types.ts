@@ -12,6 +12,13 @@ export type V3LayoutPattern =
   | 'card-grid'
   | 'sticky-header'
   | 'footer'
+  | 'stats'
+  | 'faq'
+  | 'testimonials'
+  | 'pricing'
+  | 'timeline'
+  | 'tabs'
+  | 'accordion'
   | 'content';
 
 /** V3 widget type. */

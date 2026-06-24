@@ -15,6 +15,7 @@
  */
 import type { ComputedStyleSnapshot, SectionInfo } from '../extractor/types.js';
 import type { V3LayoutPattern } from './types.js';
+import { detectComponent } from './component-detector.js';
 
 const HERO_MIN_VH = 0.7;
 const FOOTER_MIN_PADDING = 64;
@@ -64,6 +65,10 @@ export function classifySection(
 
   // 5. Image-text side-by-side (flex row, 2 columns, image+text)
   if (isImageTextSbs(sectionSnap, childSnapshots)) return 'image-text-sbs';
+
+  // 6. Extended component patterns (stats, faq, testimonials, pricing, timeline, tabs, accordion)
+  const component = detectComponent(section, sectionSnap, snapshots);
+  if (component) return component;
 
   return 'content';
 }
