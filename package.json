@@ -1,6 +1,6 @@
 {
   "name": "site-clone-to-v3",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Clone any live website to Elementor V3 — pixel-accurate, on any WordPress with the Novamira plugin.",
   "license": "MIT",
   "type": "module",

@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-06-25
+
+### Added
+- **`src/qa/vision-qa.ts`** — Anthropic Vision API QA module: compares original vs. clone screenshots semantically and returns a structured `VisionQaResult` (score 0–100, `VisionMatchRating`, typed `VisionIssue[]`, free-text feedback). The `callApi` function is injectable for tests. All issue types/severities are compatible with `issue-detector.ts`. Requires `ANTHROPIC_API_KEY` env var or `options.apiKey`.
+- **`src/qa/healing-loop.ts`** — Self-Healing Loop: vision-QA-driven iteration orchestrator. Each iteration runs Vision QA, applies matching fixers (compatible with `AutoFixFixer[]`), re-captures the clone screenshot, and re-evaluates. Stops when `overallScore >= targetScore` or `maxIterations` is reached. `captureClone` is injectable for test environments. Writes `healing-loop-report.json` to `outputDir`.
+- **`src/qa/index.ts`** re-exports `vision-qa.ts` and `healing-loop.ts` via barrel.
+- 42 new unit tests (24 vision-qa, 18 healing-loop) — test suite now at **1047 passing**.
+
 ### Added
 - **`--post-id <id>` CLI flag** on the `clone` command: threads the WordPress post ID of the deployed clone page through `WizardOptions.postId` → `CloneState.options.postId` → `PipelineOptions.postId`. Closes the HANDOFF TODO: Auto-Fix MCP calls (`createRealFixers`) now receive `postId` from the CLI without requiring manual code edits. Use together with `--clone-url` to enable the full QA auto-fix loop: `clone-v3 clone --url <src> --clone-url <deployed> --post-id <id>`.
 - **`--qa-auto-fix` CLI flag** on the `clone` command: activates the Auto-Fix iteration loop after the QA pixel-diff stage. Requires `--clone-url` + `--post-id` + a configured MCP target. Threads through `WizardOptions.qaAutoFix` → `CloneState.options.qaAutoFix` → `PipelineOptions.qaAutoFix`. Full invocation: `clone-v3 clone --url <src> --target solar-local --clone-url <deployed> --post-id <id> --qa-auto-fix`.
