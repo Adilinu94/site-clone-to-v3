@@ -22,6 +22,7 @@ import {
   type ExtractionOptions,
 } from '../extractor/playwright-extractor.js';
 import { runExtractPipeline } from '../extractor/extract-pipeline.js';
+import { writeSpecMarkdown } from '../extractor/spec-md-writer.js';
 import {
   classifyAll,
   type ClassifyAllResult,
@@ -196,6 +197,15 @@ export async function runPipeline(
       artifacts.sectionsMerged = mergedPath;
       summary.sectionMergeStats = result.v2.sectionMergeStats;
       summary.preFlight = result.v2.preFlight;
+
+      // Write human-readable .spec.md files alongside spec.json
+      const mdPaths = await writeSpecMarkdown(result.v2.spec, outputDir).catch((mdErr: Error) => {
+        console.warn(`[pipeline] writeSpecMarkdown failed (non-fatal): ${mdErr.message}`);
+        return [] as string[];
+      });
+      outputPaths.push(...mdPaths);
+      artifacts.specMdDir = path.join(outputDir, 'spec-md');
+      summary.specMdCount = mdPaths.length;
     }
 
     stages.push({
