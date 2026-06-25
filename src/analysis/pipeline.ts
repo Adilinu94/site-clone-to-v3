@@ -23,6 +23,7 @@ import {
 } from '../extractor/playwright-extractor.js';
 import { runExtractPipeline } from '../extractor/extract-pipeline.js';
 import { writeSpecMarkdown } from '../extractor/spec-md-writer.js';
+import { writeResponsiveMatrix } from '../extractor/responsive-matrix.js';
 import {
   classifyAll,
   type ClassifyAllResult,
@@ -180,6 +181,19 @@ export async function runPipeline(
     const extractionPath = path.join(outputDir, 'extraction-result.json');
     await fs.writeFile(extractionPath, JSON.stringify(result.extraction, null, 2), 'utf-8');
     artifacts.extraction = extractionPath;
+
+    // Responsive matrix: cross-viewport CSS diff (only when multi-viewport styles captured)
+    if (result.extraction.computedStyles && Object.keys(result.extraction.computedStyles).length >= 2) {
+      const matrixPath = await writeResponsiveMatrix(
+        result.extraction.computedStyles,
+        outputDir,
+        options.url,
+      ).catch((err: Error) => {
+        console.warn(`[pipeline] responsive-matrix failed (non-fatal): ${err.message}`);
+        return null;
+      });
+      if (matrixPath) artifacts.responsiveMatrix = matrixPath;
+    }
 
     const outputPaths = [extractionPath];
     const summary: Record<string, unknown> = {
