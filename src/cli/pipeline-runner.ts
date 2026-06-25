@@ -86,7 +86,7 @@ export interface PipelineRunResult {
 export async function runWizardPipeline(
   wizardResult: WizardResult,
 ): Promise<PipelineRunResult> {
-  const { state, resumeMode, interactive, cloneUrl, postId, qaAutoFix } = wizardResult;
+  const { state, resumeMode, interactive, cloneUrl, postId, qaAutoFix, mcpUrl, mcpAuth, extractor } = wizardResult;
   const stateFile = stateFileFor(state.outputDir, state.hostname);
   const outputDir = `${state.outputDir}/${state.hostname}`;
 
@@ -109,7 +109,7 @@ export async function runWizardPipeline(
 
   if (resumeMode || !interactive) {
     // Resume or non-interactive: run all remaining stages in one shot
-    return runPhase(state, stateFile, outputDir, skipStages, cloneUrl, postId, qaAutoFix);
+    return runPhase(state, stateFile, outputDir, skipStages, cloneUrl, postId, qaAutoFix, mcpUrl, mcpAuth, extractor);
   }
 
   // ─────────────── Interactive: two-phase step-by-step ───────────────
@@ -117,7 +117,7 @@ export async function runWizardPipeline(
   // Phase 1: Extract + Classify (stages 1-2)
   console.log(chalk.bold.magenta('╭── Phase 1 of 2: Extract + Classify ──╮\n'));
   const phase1Skip = new Set([...skipStages, 3, 4, 5, 6, 7]);
-  const phase1 = await runPhase(state, stateFile, outputDir, phase1Skip, cloneUrl, postId, qaAutoFix);
+  const phase1 = await runPhase(state, stateFile, outputDir, phase1Skip, cloneUrl, postId, qaAutoFix, mcpUrl, mcpAuth, extractor);
   const phase1Result = phase1.pipelineResult;
 
   if (!phase1Result?.extraction) {
@@ -216,6 +216,9 @@ async function runPhase(
   cloneUrl?: string,
   postId?: number,
   qaAutoFix?: boolean,
+  mcpUrl?: string,
+  mcpAuth?: string,
+  extractor?: 'local' | 'browserbase',
 ): Promise<PipelineRunResult> {
   let pipelineResult: PipelineResult;
   try {
@@ -228,6 +231,9 @@ async function runPhase(
       cloneUrl: cloneUrl ?? state.options.cloneUrl,
       postId: postId ?? state.options.postId,
       qaAutoFix: qaAutoFix ?? state.options.qaAutoFix,
+      mcpUrl,
+      mcpAuth,
+      extractor,
     });
   } catch (err) {
     console.error(chalk.red(`\n✗ Pipeline failed: ${err instanceof Error ? err.message : err}`));

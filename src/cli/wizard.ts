@@ -50,6 +50,12 @@ export interface WizardOptions {
   postId?: number;
   /** Enable QA auto-fix loop after pixel-diff (requires cloneUrl + postId + MCP target). */
   qaAutoFix?: boolean;
+  /** MCP endpoint URL for WP-Push and Auto-Fix (e.g. https://test4.nick-webdesign.de/wp-json/mcp/novamira). */
+  mcpUrl?: string;
+  /** Basic auth credentials for MCP endpoint (format: user:pass). */
+  mcpAuth?: string;
+  /** Browser backend for Stage 1 extraction. */
+  extractor?: 'local' | 'browserbase';
 }
 
 export interface WizardResult {
@@ -63,6 +69,12 @@ export interface WizardResult {
   postId?: number;
   /** Enable QA auto-fix loop after pixel-diff. */
   qaAutoFix?: boolean;
+  /** MCP endpoint URL for WP-Push and Auto-Fix. */
+  mcpUrl?: string;
+  /** Basic auth credentials for MCP endpoint. */
+  mcpAuth?: string;
+  /** Browser backend for Stage 1 extraction. */
+  extractor?: 'local' | 'browserbase';
 }
 
 export interface LoadedState {
@@ -214,7 +226,7 @@ export async function runWizard(opts: WizardOptions): Promise<WizardResult> {
   if (opts.postId !== undefined) state.options.postId = opts.postId;
   if (opts.qaAutoFix) state.options.qaAutoFix = opts.qaAutoFix;
 
-  return { state, resumeMode, dryRun: false, interactive: opts.interactive, cloneUrl: opts.cloneUrl, postId: opts.postId, qaAutoFix: opts.qaAutoFix };
+  return { state, resumeMode, dryRun: false, interactive: opts.interactive, cloneUrl: opts.cloneUrl, postId: opts.postId, qaAutoFix: opts.qaAutoFix, mcpUrl: opts.mcpUrl, mcpAuth: opts.mcpAuth, extractor: opts.extractor };
 }
 
 async function buildFreshState(opts: WizardOptions, url: string): Promise<CloneState> {

@@ -19,3 +19,18 @@ export {
   type FontsPluginInfo,
   type CustomFontInput,
 } from './lib/fonts-plugin-adapter.js';
+export {
+  runVisionQa,
+  type VisionQaOptions,
+  type VisionQaResult,
+  type VisionIssue,
+  type VisionMatchRating,
+  type VisionApiCallFn,
+} from './qa/vision-qa.js';
+export {
+  runHealingLoop,
+  type HealingLoopOptions,
+  type HealingLoopReport,
+  type HealingIterationResult,
+  type CaptureFn,
+} from './qa/healing-loop.js';

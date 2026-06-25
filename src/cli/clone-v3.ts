@@ -70,6 +70,9 @@ program
   .option('--clone-url <url>', 'Deployed clone page URL for visual QA stage (e.g. https://solar.local/?p=1234)')
   .option('--post-id <id>', 'WordPress post ID of the deployed clone page — required for QA auto-fix MCP calls')
   .option('--qa-auto-fix', 'Enable auto-fix loop after QA diff (requires --clone-url + --post-id + MCP target)', false)
+  .option('--mcp-url <url>', 'MCP endpoint URL for WP-Push and Auto-Fix (e.g. https://test4.nick-webdesign.de/wp-json/mcp/novamira)')
+  .option('--mcp-auth <user:pass>', 'Basic auth credentials for MCP endpoint')
+  .option('--extractor <mode>', 'Browser backend for extraction: local (default) | browserbase (cloud CDP)')
   .action(async (url: string | undefined, options) => {
     console.log(chalk.cyan(`[clone-v3 v${PACKAGE_VERSION}] full pipeline`));
     try {
@@ -92,6 +95,9 @@ program
         cloneUrl: options.cloneUrl,
         postId: options.postId !== undefined ? parseInt(options.postId as string, 10) : undefined,
         qaAutoFix: !!options.qaAutoFix,
+        mcpUrl: options.mcpUrl,
+        mcpAuth: options.mcpAuth,
+        extractor: options.extractor as 'local' | 'browserbase' | undefined,
       };
       const result = await runWizard(wizardOpts);
       const researchDir = `${wizardOpts.output}/${result.state.hostname}`;
