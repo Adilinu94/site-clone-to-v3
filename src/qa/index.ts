@@ -23,3 +23,6 @@ export * from './real-fixers.js';
 export * from './pixel-element-resolver.js';
 export * from './vision-qa.js';
 export * from './healing-loop.js';
+// Cross-validation (B2 — token vs. tree drift)
+export { crossValidateV3, crossValidateV4, writeCrossValidationReport, formatCrossValidationReport } from './cross-validator.js';
+export type { CrossValidationReport, CheckResult, CheckSeverity, CheckStatus } from './cross-validator.js';
