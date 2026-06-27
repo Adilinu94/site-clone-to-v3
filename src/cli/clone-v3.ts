@@ -230,6 +230,40 @@ program
   });
 
 program
+  .command('v3v4-diff')
+  .description('Visual diff between V3 and V4 Elementor pages (screenshot + pixelmatch + HTML report)')
+  .requiredOption('--v3-url <url>', 'V3 (original) page URL')
+  .requiredOption('--v4-url <url>', 'V4 (converted) page URL')
+  .option('--v3-label <label>', 'Label for V3 page', 'V3 (Original)')
+  .option('--v4-label <label>', 'Label for V4 page', 'V4 (Converted)')
+  .option('-o, --output <dir>', 'Output directory for screenshots and report', './v3v4-diff-output')
+  .option('--viewports <list>', 'Comma-separated viewport sizes (e.g. 1440,768,390)', '1440,768,390')
+  .action(async (options) => {
+    console.log(chalk.cyan(`[clone-v3 v${PACKAGE_VERSION}] v3v4-diff`));
+    try {
+      const { runV3V4Diff } = await import('./v3v4-diff.js');
+      const viewportWidths = options.viewports.split(',').map((s: string) => parseInt(s.trim(), 10)).filter(Number.isFinite);
+      const viewports = viewportWidths.map((w: number) => ({
+        label: w >= 1024 ? `Desktop ${w}` : w >= 600 ? `Tablet ${w}` : `Mobile ${w}`,
+        width: w,
+        height: w >= 1024 ? 900 : w >= 600 ? 1024 : 844,
+      }));
+      const htmlPath = await runV3V4Diff({
+        v3Url: options.v3Url,
+        v4Url: options.v4Url,
+        v3Label: options.v3Label,
+        v4Label: options.v4Label,
+        outputDir: options.output,
+        viewports,
+      });
+      console.log(chalk.green(`\nOpen report: ${htmlPath}`));
+    } catch (err) {
+      console.error(chalk.red('v3v4-diff failed:'), err instanceof Error ? err.message : err);
+      process.exit(1);
+    }
+  });
+
+program
   .command('add-target')
   .description('Interactively add a WP target profile (saves to ~/.clone-v3/profiles.json)')
   .action(async () => {

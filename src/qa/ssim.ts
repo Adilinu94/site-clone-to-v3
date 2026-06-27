@@ -1,6 +1,6 @@
-import { promises as fs } from 'node:fs';
+import fs from 'node:fs';
 import { PNG } from 'pngjs';
-import ssim from 'ssim.js';
+import { ssim } from 'ssim.js';
 
 export interface SsimOptions {
   originalPath: string;
@@ -18,8 +18,8 @@ export interface SsimResult {
 }
 
 export async function computeSsim(options: SsimOptions): Promise<SsimResult> {
-  const original = PNG.sync.read(await fs.readFile(options.originalPath));
-  const clone = PNG.sync.read(await fs.readFile(options.clonePath));
+  const original = PNG.sync.read(await fs.promises.readFile(options.originalPath));
+  const clone = PNG.sync.read(await fs.promises.readFile(options.clonePath));
 
   if (original.width === 0 || original.height === 0 || clone.width === 0 || clone.height === 0) {
     return {

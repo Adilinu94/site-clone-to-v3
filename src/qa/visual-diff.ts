@@ -1,4 +1,5 @@
-import { promises as fs } from 'node:fs';
+import fs from 'node:fs';
+import path from 'node:path';
 import { PNG } from 'pngjs';
 import pixelmatch from 'pixelmatch';
 
@@ -28,8 +29,8 @@ const DEFAULT_THRESHOLD = 0.1;
 export async function diffScreenshots(
   options: DiffOptions,
 ): Promise<DiffResult> {
-  const original = PNG.sync.read(await fs.readFile(options.originalPath));
-  const clone = PNG.sync.read(await fs.readFile(options.clonePath));
+  const original = PNG.sync.read(fs.readFileSync(options.originalPath));
+  const clone = PNG.sync.read(fs.readFileSync(options.clonePath));
 
   if (original.width !== clone.width || original.height !== clone.height) {
     return {
@@ -60,8 +61,8 @@ export async function diffScreenshots(
   );
 
   if (options.outputDiffPath) {
-    await fs.mkdir(require('node:path').dirname(options.outputDiffPath), { recursive: true });
-    await fs.writeFile(options.outputDiffPath, PNG.sync.write(diff));
+    fs.mkdirSync(path.dirname(options.outputDiffPath), { recursive: true });
+    fs.writeFileSync(options.outputDiffPath, PNG.sync.write(diff));
   }
 
   const totalPixels = width * height;
