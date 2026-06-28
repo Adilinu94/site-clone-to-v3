@@ -1,0 +1,15 @@
+{
+  "generated": "2026-06-28T14:49:05.232Z",
+  "v3_url": "https://test4.nick-webdesign.de/",
+  "v4_url": "https://test4.nick-webdesign.de/home-v4-atomic-conversion/",
+  "run_number": 2,
+  "run_id": "28325908224",
+  "files": [
+    "desktop-diff.png",
+    "desktop-v3.png",
+    "desktop-v4.png",
+    "mobile-diff.png",
+    "mobile-v3.png",
+    "mobile-v4.png"
+  ]
+}

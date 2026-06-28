@@ -1,0 +1,22 @@
+{
+  "v3_url": "https://test4.nick-webdesign.de/",
+  "v4_url": "https://test4.nick-webdesign.de/home-v4-atomic-conversion/",
+  "full_page": true,
+  "results": [
+    {
+      "label": "desktop",
+      "matchPct": 39,
+      "numDiff": 5417468,
+      "total": 8880480,
+      "passed": false
+    },
+    {
+      "label": "mobile",
+      "matchPct": 34.23,
+      "numDiff": 2894728,
+      "total": 4401150,
+      "passed": false
+    }
+  ],
+  "reportPath": "diff-output/report.html"
+}
