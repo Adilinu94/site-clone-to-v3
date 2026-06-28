@@ -1,21 +1,69 @@
 {
+  "run_label": "run-5",
   "v3_url": "https://test4.nick-webdesign.de/",
   "v4_url": "https://test4.nick-webdesign.de/home-v4-atomic-conversion/",
-  "full_page": true,
+  "mode": "both",
+  "section": "all",
   "results": [
     {
-      "label": "desktop",
-      "matchPct": 9.53,
-      "numDiff": 1172451,
+      "label": "desktop-fold",
+      "mode": "fold",
+      "vpLabel": "desktop",
+      "numDiff": 1172344,
       "total": 1296000,
-      "passed": false
+      "matchPct": 9.54,
+      "passed": false,
+      "heightMismatch": false,
+      "heightA": 900,
+      "heightB": 900,
+      "width": 1440,
+      "v3PageHeight": 10178,
+      "v4PageHeight": 0
     },
     {
-      "label": "mobile",
-      "matchPct": 15.46,
-      "numDiff": 278263,
+      "label": "desktop-full",
+      "mode": "full",
+      "vpLabel": "desktop",
+      "numDiff": 1172345,
+      "total": 1296000,
+      "matchPct": 9.54,
+      "passed": false,
+      "heightMismatch": true,
+      "heightA": 10178,
+      "heightB": 900,
+      "width": 1440,
+      "v3PageHeight": 10178,
+      "v4PageHeight": 0
+    },
+    {
+      "label": "mobile-fold",
+      "mode": "fold",
+      "vpLabel": "mobile",
+      "numDiff": 278005,
       "total": 329160,
-      "passed": false
+      "matchPct": 15.54,
+      "passed": false,
+      "heightMismatch": false,
+      "heightA": 844,
+      "heightB": 844,
+      "width": 390,
+      "v3PageHeight": 14987,
+      "v4PageHeight": 0
+    },
+    {
+      "label": "mobile-full",
+      "mode": "full",
+      "vpLabel": "mobile",
+      "numDiff": 278019,
+      "total": 329160,
+      "matchPct": 15.54,
+      "passed": false,
+      "heightMismatch": true,
+      "heightA": 14987,
+      "heightB": 844,
+      "width": 390,
+      "v3PageHeight": 14987,
+      "v4PageHeight": 0
     }
   ],
   "reportPath": "diff-output/report.html"
