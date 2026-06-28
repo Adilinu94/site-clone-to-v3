@@ -127,6 +127,8 @@ jobs:
           git add diff-reports/
           git diff --cached --quiet || git commit -m \
             "diff-report: run #${{ github.run_number }} — ${{ github.event.inputs.mode }}/${{ github.event.inputs.section }} — ${{ github.event.inputs.v3_url }}"
+          # Pull first to avoid conflicts when multiple runs commit concurrently
+          git pull --rebase origin main || git rebase --abort
           git push
 
       - name: Upload artifacts (backup)
