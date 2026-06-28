@@ -1,0 +1,75 @@
+name: Visual Diff — V3 vs V4
+
+on:
+  workflow_dispatch:
+    inputs:
+      v3_url:
+        description: "V3 / Original URL"
+        required: true
+        default: "https://test4.nick-webdesign.de/"
+      v4_url:
+        description: "V4 / Converted URL"
+        required: true
+        default: "https://test4.nick-webdesign.de/home-v4-atomic-conversion/"
+      viewports:
+        description: "Viewports (comma-separated: desktop,tablet,mobile)"
+        required: false
+        default: "desktop,mobile"
+      full_page:
+        description: "Full-page screenshot (true) or above-fold only (false)"
+        required: false
+        default: "true"
+
+jobs:
+  visual-diff:
+    name: Screenshot & Pixel Diff
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium --with-deps
+
+      - name: Run visual diff
+        id: diff
+        run: |
+          node scripts/visual-diff.mjs \
+            --v3-url "${{ github.event.inputs.v3_url }}" \
+            --v4-url "${{ github.event.inputs.v4_url }}" \
+            --viewports "${{ github.event.inputs.viewports }}" \
+            --full-page "${{ github.event.inputs.full_page }}" \
+            --output diff-output/ \
+          | tee diff-result.json
+
+          # Extract match percentage for job summary
+          SUMMARY=$(node -e "
+            const fs = require('fs');
+            const r = JSON.parse(fs.readFileSync('diff-result.json','utf8'));
+            r.results.forEach(v => {
+              console.log('## ' + v.label + ': ' + v.matchPct + '% match');
+              const icon = parseFloat(v.matchPct) >= 85 ? '✅' : '⚠️';
+              console.log(icon + ' ' + v.numDiff.toLocaleString() + ' of ' + v.total.toLocaleString() + ' pixels differ');
+            });
+          ")
+          echo "\$SUMMARY" >> \$GITHUB_STEP_SUMMARY
+          echo "v3_url=${{ github.event.inputs.v3_url }}" >> \$GITHUB_STEP_SUMMARY
+          echo "v4_url=${{ github.event.inputs.v4_url }}" >> \$GITHUB_STEP_SUMMARY
+
+      - name: Upload diff artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: visual-diff-${{ github.run_number }}
+          path: diff-output/
+          retention-days: 7
