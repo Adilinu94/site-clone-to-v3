@@ -12,8 +12,8 @@
     },
     {
       "label": "mobile",
-      "matchPct": 15.53,
-      "numDiff": 278057,
+      "matchPct": 15.46,
+      "numDiff": 278263,
       "total": 329160,
       "passed": false
     }
