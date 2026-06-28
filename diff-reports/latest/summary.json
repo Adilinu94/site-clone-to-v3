@@ -5,16 +5,16 @@
   "results": [
     {
       "label": "desktop",
-      "matchPct": 39,
-      "numDiff": 5417468,
-      "total": 8880480,
+      "matchPct": 9.53,
+      "numDiff": 1172451,
+      "total": 1296000,
       "passed": false
     },
     {
       "label": "mobile",
-      "matchPct": 34.23,
-      "numDiff": 2894728,
-      "total": 4401150,
+      "matchPct": 15.53,
+      "numDiff": 278057,
+      "total": 329160,
       "passed": false
     }
   ],
