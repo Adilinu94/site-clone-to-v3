@@ -20,6 +20,9 @@ on:
         required: false
         default: "true"
 
+permissions:
+  contents: write
+
 jobs:
   visual-diff:
     name: Screenshot & Pixel Diff
@@ -52,24 +55,42 @@ jobs:
             --output diff-output/ \
           | tee diff-result.json
 
-          # Extract match percentage for job summary
-          SUMMARY=$(node -e "
-            const fs = require('fs');
-            const r = JSON.parse(fs.readFileSync('diff-result.json','utf8'));
-            r.results.forEach(v => {
-              console.log('## ' + v.label + ': ' + v.matchPct + '% match');
-              const icon = parseFloat(v.matchPct) >= 85 ? '✅' : '⚠️';
-              console.log(icon + ' ' + v.numDiff.toLocaleString() + ' of ' + v.total.toLocaleString() + ' pixels differ');
-            });
-          ")
-          echo "\$SUMMARY" >> \$GITHUB_STEP_SUMMARY
-          echo "v3_url=${{ github.event.inputs.v3_url }}" >> \$GITHUB_STEP_SUMMARY
-          echo "v4_url=${{ github.event.inputs.v4_url }}" >> \$GITHUB_STEP_SUMMARY
+          # Job summary
+          node - << 'JS'
+          const r = JSON.parse(require('fs').readFileSync('diff-result.json','utf8'));
+          const lines = [`## Visual Diff Results`, `| Viewport | Match | Status |`, `|---|---|---|`];
+          r.results.forEach(v => {
+            const icon = parseFloat(v.matchPct) >= 85 ? '✅' : '⚠️';
+            lines.push(`| ${v.label} | ${v.matchPct}% | ${icon} |`);
+          });
+          lines.push(``, `**V3:** ${r.v3_url}`, `**V4:** ${r.v4_url}`);
+          require('fs').appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n'));
+          JS
 
-      - name: Upload diff artifacts
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: visual-diff-${{ github.run_number }}
-          path: diff-output/
-          retention-days: 7
+      # Commit screenshots + report to diff-reports/ in main
+      - name: Commit diff screenshots to repo
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Move to persistent reports dir (overwrite latest)
+          mkdir -p diff-reports/latest
+          cp diff-output/*.png diff-reports/latest/
+          cp diff-result.json diff-reports/latest/summary.json
+
+          # Add metadata file so consumers know what was compared
+          node - << 'JS'
+          const meta = {
+            generated: new Date().toISOString(),
+            v3_url: "${{ github.event.inputs.v3_url }}",
+            v4_url: "${{ github.event.inputs.v4_url }}",
+            run_number: ${{ github.run_number }},
+            run_id: "${{ github.run_id }}",
+            files: require('fs').readdirSync('diff-output').filter(f => f.endsWith('.png'))
+          };
+          require('fs').writeFileSync('diff-reports/latest/meta.json', JSON.stringify(meta, null, 2));
+          JS
+
+          git add diff-reports/
+          git diff --cached --quiet || git commit -m "diff-report: run #${{ github.run_number }} — ${{ github.event.inputs.v3_url }} vs ${{ github.event.inputs.v4_url }}"
+          git push
