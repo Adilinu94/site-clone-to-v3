@@ -487,12 +487,121 @@ const g10KnownAtomicType: Guard<V4AtomicElement[]> = {
   },
 };
 
+/**
+ * G11 — Every class referenced in the `classes` array must have a
+ * corresponding entry in the element's `styles` map. Orphan class
+ * references produce blank `<div class="...">` attributes and silently
+ * fail in Elementor V4 (styles won't apply).
+ *
+ * This is the inverse of the V4-Pipeline's STYLE_CLASSES_BINDING guard.
+ */
+const g11StyleClassesBinding: Guard<V4AtomicElement[]> = {
+  name: 'G11:style-classes-binding',
+  severity: 'warning',
+  check(tree) {
+    const all = collectAllV4Elements(tree);
+    const orphaned: string[] = [];
+
+    for (const el of all) {
+      const classes = el.classes ?? [];
+      const styleIds = Object.keys(el.styles ?? {});
+
+      for (const cls of classes) {
+        // Skip global class references (gc-* prefix)
+        if (cls.startsWith('gc-')) continue;
+        if (!styleIds.includes(cls)) {
+          orphaned.push(`${el.id}: class "${cls}" not found in styles{}`);
+        }
+      }
+    }
+
+    if (orphaned.length > 0) {
+      return {
+        passed: false,
+        message: `${orphaned.length} orphan class reference(s) (class in classes[] but not in styles{})`,
+        details: orphaned.slice(0, 5).join('; '),
+      };
+    }
+    return { passed: true, message: 'All classes are bound to style definitions' };
+  },
+};
+
+/**
+ * G12 — Image and e-image widget settings must have a valid image source.
+ *
+ * For V4 atomic format: `image-src` $$type with exactly one of {id, url}.
+ * For V3 legacy format: `image` object with a non-empty `url` or `id`.
+ * Catches scraper failures where image data was not extracted.
+ */
+const g12ImageSrcFormat: Guard<V4AtomicElement[]> = {
+  name: 'G12:image-src-format',
+  severity: 'warning',
+  check(tree) {
+    const all = collectAllV4Elements(tree);
+    const imageWidgets = all.filter((el) => el.type === 'e-image' || el.type === 'image');
+    const invalid: string[] = [];
+
+    for (const el of imageWidgets) {
+      const s = (el.settings ?? {}) as Record<string, unknown>;
+      const image = s['image'] as Record<string, unknown> | undefined;
+      const imageSrc = s['image-src'] ?? s['image_src'];
+
+      // Check V3-style image object
+      if (image && typeof image === 'object') {
+        const hasId = image['id'] !== undefined && image['id'] !== null && image['id'] !== 0;
+        const hasUrl = typeof image['url'] === 'string' && image['url'].length > 0;
+        if (!hasId && !hasUrl) {
+          invalid.push(`${el.id}: image object has neither valid id nor url`);
+        }
+        // Check for url: null (V4 anti-pattern)
+        if ('url' in image && image['url'] === null) {
+          invalid.push(`${el.id}: image object has url: null (omit the key entirely in V4)`);
+        }
+        continue;
+      }
+
+      // Check V4-style image-src
+      if (imageSrc && typeof imageSrc === 'object') {
+        const srcObj = imageSrc as Record<string, unknown>;
+        const value = (srcObj['value'] ?? srcObj) as Record<string, unknown> | undefined;
+        if (value && typeof value === 'object') {
+          const hasId = value['id'] !== undefined && value['id'] !== null;
+          const hasUrl = typeof value['url'] === 'string' && value['url'].length > 0;
+          if (!hasId && !hasUrl) {
+            invalid.push(`${el.id}: image-src has neither id nor url`);
+          }
+        }
+        continue;
+      }
+
+      // No image data at all
+      if (!image && !imageSrc) {
+        invalid.push(`${el.id}: no image or image-src setting found`);
+      }
+    }
+
+    if (invalid.length > 0) {
+      return {
+        passed: false,
+        message: `${invalid.length} image widget(s) have malformed or missing image source`,
+        details: invalid.slice(0, 5).join('; '),
+      };
+    }
+    return {
+      passed: true,
+      message: `All ${imageWidgets.length} image widget(s) have valid image sources`,
+    };
+  },
+};
+
 export const V4_GUARDS: ReadonlyArray<Guard<V4AtomicElement[]>> = [
   g6ValidDollarType,
   g7NoHyphenInClass,
   g8MaxDomDepth,
   g9NoEmptyClass,
   g10KnownAtomicType,
+  g11StyleClassesBinding,
+  g12ImageSrcFormat,
 ];
 
 // ============================================================================
