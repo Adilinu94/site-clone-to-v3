@@ -82,12 +82,30 @@ fs.mkdirSync(OUT_DIR, { recursive: true });
 
 async function capture(page, url, vp, outPath) {
   await page.setViewportSize(vp);
-  await page.goto(url, { waitUntil: "networkidle", timeout: 30_000 }).catch(async () => {
-    // networkidle can be flaky on heavy pages — fallback
-    await page.waitForTimeout(6000);
-  });
-  // Extra wait for lazy-loaded images / animations
-  await page.waitForTimeout(1500);
+
+  // Attempt load — networkidle can timeout on heavy pages
+  const loadOk = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 })
+    .then(() => true)
+    .catch(() => false);
+
+  if (!loadOk) {
+    await page.waitForTimeout(8000);
+  }
+
+  // Wait until body has content (not a blank/error page)
+  await page.waitForFunction(
+    () => document.body && document.body.innerHTML.length > 5000,
+    { timeout: 20_000 }
+  ).catch(() => {});
+
+  // Scroll to trigger lazy-load images, then back to top
+  await page.evaluate(() => window.scrollTo({ top: document.body.scrollHeight, behavior: "instant" }));
+  await page.waitForTimeout(1000);
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+
+  // Final settle time for CSS animations
+  await page.waitForTimeout(2500);
+
   await page.screenshot({ path: outPath, fullPage: FULL_PAGE });
 }
 
