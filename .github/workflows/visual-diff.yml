@@ -12,22 +12,34 @@ on:
         required: true
         default: "https://test4.nick-webdesign.de/home-v4-atomic-conversion/"
       viewports:
-        description: "Viewports (comma-separated: desktop,tablet,mobile)"
+        description: "Viewports (desktop,tablet,mobile)"
         required: false
         default: "desktop,mobile"
-      full_page:
-        description: "Full-page screenshot (true) or above-fold only (false)"
+      mode:
+        description: "Screenshot mode: fold | full | both"
         required: false
-        default: "true"
+        default: "both"
+      section:
+        description: "Crop section: all | hero | services | cta"
+        required: false
+        default: "all"
+      retries:
+        description: "Screenshot retries on blank/error (1-5)"
+        required: false
+        default: "3"
+      pass_pct:
+        description: "Match % required to PASS (default: 85)"
+        required: false
+        default: "85"
 
 permissions:
   contents: write
 
 jobs:
   visual-diff:
-    name: Screenshot & Pixel Diff
+    name: "📸 Visual Diff (${{ github.event.inputs.mode }} / ${{ github.event.inputs.section }})"
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
@@ -48,49 +60,85 @@ jobs:
         id: diff
         run: |
           node scripts/visual-diff.mjs \
-            --v3-url "${{ github.event.inputs.v3_url }}" \
-            --v4-url "${{ github.event.inputs.v4_url }}" \
+            --v3-url    "${{ github.event.inputs.v3_url }}" \
+            --v4-url    "${{ github.event.inputs.v4_url }}" \
             --viewports "${{ github.event.inputs.viewports }}" \
-            --full-page "${{ github.event.inputs.full_page }}" \
-            --output diff-output/ \
+            --mode      "${{ github.event.inputs.mode }}" \
+            --section   "${{ github.event.inputs.section }}" \
+            --retries   "${{ github.event.inputs.retries }}" \
+            --pass-pct  "${{ github.event.inputs.pass_pct }}" \
+            --run-label "run-${{ github.run_number }}" \
+            --output    diff-output/ \
           | tee diff-result.json
+        continue-on-error: true   # don't fail job on visual regression; report it
 
-          # Job summary
+      - name: Write GitHub step summary
+        if: always()
+        run: |
           node - << 'JS'
-          const r = JSON.parse(require('fs').readFileSync('diff-result.json','utf8'));
-          const lines = [`## Visual Diff Results`, `| Viewport | Match | Status |`, `|---|---|---|`];
+          const fs = require('fs');
+          let r;
+          try { r = JSON.parse(fs.readFileSync('diff-result.json','utf8')); }
+          catch { process.stdout.write('⚠️ Could not parse diff-result.json\n'); process.exit(0); }
+          const lines = [
+            `## 📸 Visual Diff — ${r.run_label}`,
+            `| Viewport | Mode | Match | Status |`,
+            `|---|---|---|---|`,
+          ];
           r.results.forEach(v => {
             const icon = parseFloat(v.matchPct) >= 85 ? '✅' : '⚠️';
-            lines.push(`| ${v.label} | ${v.matchPct}% | ${icon} |`);
+            const hWarn = v.heightMismatch ? ' ⚠ height mismatch' : '';
+            lines.push(`| ${v.label} | ${v.mode} | **${v.matchPct}%** | ${icon}${hWarn} |`);
           });
-          lines.push(``, `**V3:** ${r.v3_url}`, `**V4:** ${r.v4_url}`);
-          require('fs').appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n'));
+          lines.push('', `**V3:** ${r.v3_url}`, `**V4:** ${r.v4_url}`);
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n') + '\n');
           JS
 
-      # Commit screenshots + report to diff-reports/ in main
       - name: Commit diff screenshots to repo
+        if: always()
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Move to persistent reports dir (overwrite latest)
-          mkdir -p diff-reports/latest
-          cp diff-output/*.png diff-reports/latest/
-          cp diff-result.json diff-reports/latest/summary.json
+          mkdir -p diff-reports/latest diff-reports/history
 
-          # Add metadata file so consumers know what was compared
+          # Copy to latest/ (always overwrite — easy to fetch via raw.githubusercontent.com)
+          cp diff-output/*.png diff-reports/latest/ 2>/dev/null || true
+          cp diff-result.json diff-reports/latest/summary.json 2>/dev/null || true
+
+          # Write meta for consumers
           node - << 'JS'
+          const fs = require('fs');
+          const files = fs.readdirSync('diff-output').filter(f => f.endsWith('.png'));
           const meta = {
-            generated: new Date().toISOString(),
-            v3_url: "${{ github.event.inputs.v3_url }}",
-            v4_url: "${{ github.event.inputs.v4_url }}",
-            run_number: ${{ github.run_number }},
-            run_id: "${{ github.run_id }}",
-            files: require('fs').readdirSync('diff-output').filter(f => f.endsWith('.png'))
+            generated:   new Date().toISOString(),
+            run_number:  ${{ github.run_number }},
+            run_id:      "${{ github.run_id }}",
+            run_label:   "run-${{ github.run_number }}",
+            v3_url:      "${{ github.event.inputs.v3_url }}",
+            v4_url:      "${{ github.event.inputs.v4_url }}",
+            mode:        "${{ github.event.inputs.mode }}",
+            section:     "${{ github.event.inputs.section }}",
+            files,
           };
-          require('fs').writeFileSync('diff-reports/latest/meta.json', JSON.stringify(meta, null, 2));
+          fs.writeFileSync('diff-reports/latest/meta.json', JSON.stringify(meta, null, 2));
           JS
 
           git add diff-reports/
-          git diff --cached --quiet || git commit -m "diff-report: run #${{ github.run_number }} — ${{ github.event.inputs.v3_url }} vs ${{ github.event.inputs.v4_url }}"
+          git diff --cached --quiet || git commit -m \
+            "diff-report: run #${{ github.run_number }} — ${{ github.event.inputs.mode }}/${{ github.event.inputs.section }} — ${{ github.event.inputs.v3_url }}"
           git push
+
+      - name: Upload artifacts (backup)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: visual-diff-run-${{ github.run_number }}
+          path: diff-output/
+          retention-days: 14
+
+      - name: Fail if visual regression found
+        if: steps.diff.outcome == 'failure'
+        run: |
+          echo "❌ Visual regression detected. Check diff-reports/latest/ for screenshots."
+          exit 1
