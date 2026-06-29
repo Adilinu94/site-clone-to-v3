@@ -175,6 +175,18 @@ async function capture(browser, url, outPath, vp, fullPage) {
       // Step 3: let JS/CSS finish (fonts, lazy images, Elementor init)
       await page.waitForTimeout(3000);
 
+      // Step 3b: wait for page to actually be scrollable
+      // Elementor compiles CSS on first load after cache-clear; until CSS is served,
+      // all elements have height:0 and document.body.scrollHeight == viewportHeight.
+      // This guard detects that and waits up to 12s for the page to expand.
+      if (fullPage) {
+        await page.waitForFunction(
+          (vpH) => document.body.scrollHeight > vpH * 1.5,
+          { timeout: 12_000 },
+          vp.height
+        ).catch(() => log(`  [attempt ${attempt}] ⚠ Page scrollHeight still == viewport — CSS may not be loaded yet`));
+      }
+
       // Step 4: scroll full page to trigger lazy-loaded images
       if (fullPage) {
         await page.evaluate(async () => {
