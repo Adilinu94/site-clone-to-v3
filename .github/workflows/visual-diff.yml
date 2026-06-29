@@ -56,6 +56,14 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install chromium --with-deps
 
+      - name: Warm up URLs (ensure Elementor CSS is compiled before screenshots)
+        run: |
+          # Hit both URLs once via curl — triggers Elementor CSS generation on server.
+          # Without this, Playwright may screenshot before CSS file is ready (scrollHeight = viewport).
+          curl -sL --max-time 20 "${{ github.event.inputs.v3_url }}" -o /dev/null -w "V3 HTTP %{http_code} (%{size_download}B)\n"
+          curl -sL --max-time 20 "${{ github.event.inputs.v4_url }}" -o /dev/null -w "V4 HTTP %{http_code} (%{size_download}B)\n"
+          sleep 3
+
       - name: Run visual diff
         id: diff
         run: |
