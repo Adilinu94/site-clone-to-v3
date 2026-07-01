@@ -86,7 +86,7 @@ export interface PipelineRunResult {
 export async function runWizardPipeline(
   wizardResult: WizardResult,
 ): Promise<PipelineRunResult> {
-  const { state, resumeMode, interactive, cloneUrl, postId, qaAutoFix, mcpUrl, mcpAuth, extractor } = wizardResult;
+  const { state, resumeMode, interactive, cloneUrl, postId, qaAutoFix, upgradeToV4, mcpUrl, mcpAuth, extractor } = wizardResult;
   const stateFile = stateFileFor(state.outputDir, state.hostname);
   const outputDir = `${state.outputDir}/${state.hostname}`;
 
@@ -109,7 +109,7 @@ export async function runWizardPipeline(
 
   if (resumeMode || !interactive) {
     // Resume or non-interactive: run all remaining stages in one shot
-    return runPhase(state, stateFile, outputDir, skipStages, cloneUrl, postId, qaAutoFix, mcpUrl, mcpAuth, extractor);
+    return runPhase(state, stateFile, outputDir, skipStages, cloneUrl, postId, qaAutoFix, mcpUrl, mcpAuth, extractor, upgradeToV4);
   }
 
   // ─────────────── Interactive: two-phase step-by-step ───────────────
@@ -157,6 +157,7 @@ export async function runWizardPipeline(
     cloneUrl: cloneUrl ?? state.options.cloneUrl,
     postId: postId ?? state.options.postId,
     qaAutoFix: qaAutoFix ?? state.options.qaAutoFix,
+    upgradeToV4: upgradeToV4 ?? state.options.upgradeToV4,
   });
 
   // Update state from phase 2 stages
@@ -219,6 +220,7 @@ async function runPhase(
   mcpUrl?: string,
   mcpAuth?: string,
   extractor?: 'local' | 'browserbase',
+  upgradeToV4?: boolean,
 ): Promise<PipelineRunResult> {
   let pipelineResult: PipelineResult;
   try {
@@ -231,6 +233,7 @@ async function runPhase(
       cloneUrl: cloneUrl ?? state.options.cloneUrl,
       postId: postId ?? state.options.postId,
       qaAutoFix: qaAutoFix ?? state.options.qaAutoFix,
+      upgradeToV4: upgradeToV4 ?? state.options.upgradeToV4,
       mcpUrl,
       mcpAuth,
       extractor,

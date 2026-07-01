@@ -72,6 +72,10 @@ import {
   pushToWordPress,
   type WpPushResult,
 } from '../mcp/wp-push.js';
+import {
+  upgradePageToV4,
+  type UpgradeV4Result,
+} from '../mcp/upgrade-v4.js';
 
 export interface PipelineOptions extends ExtractionOptions {
   outputDir: string;
@@ -92,6 +96,12 @@ export interface PipelineOptions extends ExtractionOptions {
   qaAutoFix?: boolean;
   /** Post-ID of the deployed Elementor page for Auto-Fix elementor-edit-element calls. */
   postId?: number;
+  /**
+   * Upgrade the pushed page to Elementor V4 Atomic Widgets as the final stage
+   * (requires postId + mcpUrl). Runs via novamira-adrianv2/upgrade-page-to-v4,
+   * after WP-push and QA/auto-fix have completed. Default: false.
+   */
+  upgradeToV4?: boolean;
   /**
    * Browser backend for Stage 1 extraction.
    * 'local'      — Playwright chromium.launch() (default, requires local Chrome)
@@ -124,6 +134,7 @@ export interface PipelineResult {
   fontKit?: FontKitResult;
   animationPlan?: AnimationPlan;
   wpPush?: WpPushResult;
+  upgradeV4?: UpgradeV4Result;
   artifacts: Record<string, string>;
 }
 
@@ -155,6 +166,7 @@ export async function runPipeline(
   let fontKit: FontKitResult | undefined;
   let animationPlan: AnimationPlan | undefined;
   let wpPush: WpPushResult | undefined;
+  let upgradeV4Result: UpgradeV4Result | undefined;
 
   // Stage 1: extract (V2 — runExtractPipeline with robots.txt, rate-limit, section-merge, spec.json)
   //   runExtractPipeline internally calls extractFromUrl(), applies mergeSmallSections(),
@@ -611,6 +623,33 @@ export async function runPipeline(
     });
   }
 
+  // V4 upgrade — final step, converts the pushed page to Atomic Widgets via
+  // novamira-adrianv2/upgrade-page-to-v4. Runs after QA/auto-fix so the
+  // auto-fix loop (which operates on V3 element structure) always sees V3
+  // markup. Not part of the numbered stages[]/resume system: the ability is
+  // already idempotent via its own skip_v4 flag, so resume-tracking wasn't
+  // needed for this to be safe to re-run.
+  if (options.upgradeToV4) {
+    if (options.postId !== undefined && options.mcpUrl) {
+      const mcp = new McpAdapter({
+        baseUrl: options.mcpUrl,
+        authHeader: options.mcpAuth
+          ? `Basic ${Buffer.from(options.mcpAuth).toString('base64')}`
+          : '',
+      });
+      upgradeV4Result = await upgradePageToV4(mcp, {
+        postId: options.postId,
+        dryRun: options.dryRun,
+      });
+    } else {
+      upgradeV4Result = {
+        success: false,
+        status: 'skipped',
+        error: 'upgrade-to-v4 requested but skipped — requires postId + mcpUrl',
+      };
+    }
+  }
+
   return {
     url,
     startedAt,
@@ -624,6 +663,7 @@ export async function runPipeline(
     fontKit,
     animationPlan,
     wpPush,
+    upgradeV4: upgradeV4Result,
     artifacts,
   };
 }

@@ -49,6 +49,8 @@ export interface CloneState {
     postId?: number;
     /** Enable QA auto-fix loop after pixel-diff (requires cloneUrl + postId + MCP). */
     qaAutoFix?: boolean;
+    /** Upgrade the pushed page to Elementor V4 Atomic Widgets as the final pipeline step. */
+    upgradeToV4?: boolean;
   };
 }
 

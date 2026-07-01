@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`src/mcp/upgrade-v4.ts`** — `upgradePageToV4()`: calls `novamira-adrianv2/upgrade-page-to-v4` via MCP to convert a pushed V3 page to Elementor V4 Atomic Widgets. `--upgrade-to-v4` CLI flag (requires `--post-id` + MCP target). Runs as the final pipeline step, after WP-push and QA/auto-fix, so the auto-fix loop always operates on V3 markup. `dry_run` passes through to the ability's own native dry-run support. Not part of the numbered `stages[]`/resume system — the ability is idempotent via its own `skip_v4` flag. 8 new unit tests — test suite now at **1129 passing**.
+
 ## [0.2.0] — 2026-06-25
 
 ### Added
