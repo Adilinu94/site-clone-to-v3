@@ -51,6 +51,8 @@ export interface CloneState {
     qaAutoFix?: boolean;
     /** Upgrade the pushed page to Elementor V4 Atomic Widgets as the final pipeline step. */
     upgradeToV4?: boolean;
+    /** Enable Vision-QA healing loop after pixel-diff (requires cloneUrl + postId + MCP). */
+    heal?: boolean;
   };
 }
 

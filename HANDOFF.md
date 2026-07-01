@@ -1,10 +1,13 @@
 # SITE-CLONE-TO-V3 — Handoff für nächste Session
 
-> **Stand:** 2026-06-18, 09:50 — Phase 8 Lückenschluss: Real Auto-Fixer implementiert
-> **Letzter verifizierter Commit auf `main`:** `8b0df1f` (V2-Phase-1+2-Pipeline-Integration)
-> **Tests:** 928/928 grün, TS-clean (0 errors)
-> **Commits seit `origin/main`:** 13 ahead, gepusht
-> **Real-Fixer-Commit (in Vorbereitung):** siehe untracked/staged files
+> **Stand:** 2026-07-01 — Doku-Realitätscheck (UMBAUPLAN-KOMBINIERT Phase 0)
+> **Tests:** 1121/1121 grün (78 Dateien), TS sauber — live verifiziert
+> **Guards:** G1–G12 in `src/validator/json-guard.ts` (nicht 14)
+> **Asset-Stage-Pipeline-Integration:** geschlossen — `pipeline.ts` ruft `downloadImages/Fonts/Svgs/Favicons` bereits auf (siehe korrigierte Notiz unter "Asset-Downloader-Status" unten)
+> **`--post-id`:** vollständig durch `PipelineOptions` durchgereicht (live in `src/analysis/pipeline.ts`, u.a. Auto-Fix-Loop + Push-Result) — der TODO weiter unten in diesem Dokument ist überholt
+> **Aktueller Plan:** `UMBAUPLAN-KOMBINIERT-2026-07.md` (ersetzt alle älteren `BAUPLAN`/Umbauplan-Referenzen in diesem Dokument) — größter offener Punkt für dieses Repo: `--upgrade-to-v4` in `clone-v3.ts` + `pipeline.ts` verdrahten (Ability existiert bereits im Plugin, wird aber nirgends aufgerufen)
+>
+> Der Rest dieses Dokuments unterhalb ist die **Entwicklungshistorie** (Phase 7–9B) und weitgehend akkurat als Zeitpunkt-Aufzeichnung — nur die zusammenfassenden Listen "Was noch fehlt" und "Nächste sinnvolle Schritte" waren nicht mehr aktuell und wurden unten korrigiert.
 
 ## TL;DR
 
@@ -25,13 +28,14 @@
 | 7 | `a65abf1` | animation-injector + WPCode snippet planner + typecheck repair |
 | **8** | **`c787ed0`** | **visual-qa + auto-fix + html-report + strictness-profiles** |
 
-## Was noch fehlt (Phase 9+)
+## Was noch fehlt (Stand 2026-07-01)
 
-Laut `BAUPLAN-SITE-CLONE-TO-V3.md`:
+Phase 9 (Wizard-Integration, siehe Phase-9A/9B-Details weiter unten) ist entgegen der ursprünglichen Fassung dieser Liste **fertig**. Echte offene Punkte laut `UMBAUPLAN-KOMBINIERT-2026-07.md`:
 
-- **Phase 9** — Wizard-Integration (interaktive CLI mit Inquirer)
-- **Phase 10** — Tests (E2E gegen echte WP-Targets)
-- **Phase 11** — Docs + npm-Package + Veröffentlichung
+- **`--upgrade-to-v4`-Flag** in `clone-v3.ts` + MCP-Call an `novamira-adrianv2/upgrade-page-to-v4` in `pipeline.ts` (Ability existiert fertig im Plugin, ist aber nirgends angeschlossen — größter Quick-Win)
+- ~~`--heal`-CLI-Flag~~ **erledigt (2026-07-01):** komplett durch `clone-v3.ts → wizard.ts → state-manager.ts → pipeline-runner.ts → pipeline.ts` verdrahtet, exakt analog zu `--qa-auto-fix`. `tsc --noEmit` clean, 1121/1121 Tests grün, lint clean.
+- **`v4PageHeight: 0`-Befund** in `diff-reports/latest` (run #8, 29.06.) — Ursache weiterhin nicht live verifiziert (kein Domain-Zugriff auf test4 von hier aus). **Update 2026-07-01:** Diagnose-Lücke in `scripts/visual-diff.mjs` behoben — die drei früh-`continue`-Pfade (HTTP-Status, Health-Check, leerer Screenshot) setzten `lastError` nie, weshalb die finale "FAILED"-Logzeile immer `undefined` zeigte statt des echten Grunds. Jetzt wird ein `lastReason`-String gesetzt und in der finalen Logzeile ausgegeben. Reine Logging-Änderung, Rückgabewert-Form unverändert, nur syntaxgeprüft (`node --check`) — kein Testharness für dieses Skript vorhanden. Nächster Live-Lauf zeigt den echten Grund in den GH-Actions-Logs statt `undefined`.
+- Phase 10/11 aus dem alten `BAUPLAN` (E2E gegen echte WP-Targets, npm-Publish) — nicht im aktuellen Umbauplan priorisiert, weiterhin grundsätzlich offen
 
 ## Phase-8-Real-Fixer-Lückenschluss (2026-06-18)
 
@@ -71,7 +75,7 @@ Laut `BAUPLAN-SITE-CLONE-TO-V3.md`:
 **Live-E2E-Voraussetzung (für echten Auto-Fix-Lauf):**
 - Voraussetzungen: `cloneUrl` (deployed Seite), `postId` (Elementor-Seiten-ID), `mcpUrl`/`mcpAuth`, `page-v3.json` im Output-Dir.
 - CLI-Aufruf: `node dist/cli/clone-v3.js clone --url <source> --target <profile> --no-wizard --clone-url <deployed> --output ./research/<slug>`
-- Aktuell: CLI-`clone` unterstützt `--clone-url`, aber `--post-id` muss noch durchgereicht werden (TODO PipelineOptions → CLI-Mapping).
+- **Update 2026-07-01:** `--post-id` ist inzwischen vollständig durch `PipelineOptions` durchgereicht (live in `pipeline.ts` verifiziert) — der ursprüngliche TODO hier ist erledigt.
 
 **Ehrliche Erkenntnis (2026-06-18 Live-E2E gegen test4):**
 - V2-Pipeline läuft alle 7 Stages durch mit `node dist/cli/clone-v3.js clone --url https://test4.nick-webdesign.de --no-wizard --dry-run --auto-pick-sections --output ./tmp`.
@@ -122,7 +126,9 @@ Damit können WPCode-Snippets die cloned Sections direkt targeten, **ohne** V3-E
 
 ### Asset-Downloader-Status
 
-Die `pipeline.ts` ruft `downloadImages`/`downloadFonts`/`downloadSvgs`/`downloadFavicons` NICHT mehr in den Build-Stages auf (das war in `375d2a5` broken — die Funktionen hatten komplett andere Signaturen). Die Asset-Downloader-Logik existiert weiterhin unter `src/scraper/` und kann via separatem `clone assets` Subcommand genutzt werden. **Diese Lücke sollte in einer späteren Session als "Asset-Stage-Pipeline-Integration" addressiert werden** — sie war nicht in Phase 7 Scope.
+**Update 2026-07-01: geschlossen.** `pipeline.ts` ruft `downloadImages`/`downloadFonts`/`downloadSvgs`/`downloadFavicons` inzwischen wieder auf — die Asset-Stage-Pipeline-Integration, die hier als offene Lücke markiert war, ist live verifiziert vorhanden. (Ursprüngliche Notiz vom 2026-06-18 unten als Kontext belassen.)
+
+Ursprüngliche Notiz (2026-06-18): Die `pipeline.ts` rief `downloadImages`/`downloadFonts`/`downloadSvgs`/`downloadFavicons` NICHT mehr in den Build-Stages auf (das war in `375d2a5` broken — die Funktionen hatten komplett andere Signaturen). Die Asset-Downloader-Logik existierte weiterhin unter `src/scraper/` und konnte via separatem `clone assets` Subcommand genutzt werden.
 
 ## MCP-Adapter (test4 live)
 
@@ -233,10 +239,14 @@ Default-Fixer sind **placeholders** (return `ok: false`). Sie dokumentieren nur,
 
 ## Nächste sinnvolle Schritte (Reihenfolge)
 
-1. **Phase 10 — Tests** (E2E gegen echte WP-Targets, 2.5 Tage)
-2. **Phase 11 — Docs + npm-Publish** (2 Tage)
-3. **Real-Fixer implementieren** (Phase 8 hat nur Placeholder-Fixer; die echten MCP-Calls für color/font/layout/image-fix müssen in einer späteren Phase kommen)
-4. **Pipeline-Runner in `clone` integrieren** — `pipeline-runner.ts` existiert und ist state-aware, wird aber noch nicht vom `clone`-Command aufgerufen (nur dry-run/diff/incremental).
+**Update 2026-07-01:** Diese Liste war veraltet — Punkt 3 (Real-Fixer) ist seit der Phase-8-Lückenschluss-Session (siehe unten) erledigt. Aktuelle Priorität kommt aus `UMBAUPLAN-KOMBINIERT-2026-07.md`:
+
+1. **`--upgrade-to-v4` verdrahten** (P0, Quick-Win, ~1–2 Std.) — siehe "Was noch fehlt" oben — **weiterhin offen, war nicht Teil dieser Session (Scope: nur Phase 3 aus UMBAUPLAN)**
+2. ~~`--heal`-Flag anschließen~~ **erledigt (2026-07-01)**
+3. **`v4PageHeight: 0`-Ursache klären** — Diagnose-Logging verbessert (siehe oben), eigentliche Ursache braucht weiterhin einen Live-Lauf gegen test4 (z.B. via `gh workflow run visual-diff.yml` oder manuell im Actions-Tab)
+4. **Pipeline-Runner in `clone` integrieren** — **korrigiert (2026-07-01): war schon erledigt, alte Notiz war falsch.** `clone-v3.ts` ruft `runWizardPipeline(result)` bereits auf (verifiziert per Code-Lesen) — dieser Punkt war nur nie neu geprüft worden.
+
+Alte Punkte 1+2 (Phase 10/11 aus `BAUPLAN-SITE-CLONE-TO-V3.md`) sind im aktuellen Umbauplan nicht priorisiert.
 
 ## Live-E2E-Befund 2026-06-18 (gegen test4.nick-webdesign.de)
 

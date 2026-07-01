@@ -86,7 +86,7 @@ export interface PipelineRunResult {
 export async function runWizardPipeline(
   wizardResult: WizardResult,
 ): Promise<PipelineRunResult> {
-  const { state, resumeMode, interactive, cloneUrl, postId, qaAutoFix, upgradeToV4, mcpUrl, mcpAuth, extractor } = wizardResult;
+  const { state, resumeMode, interactive, cloneUrl, postId, qaAutoFix, upgradeToV4, heal, mcpUrl, mcpAuth, extractor } = wizardResult;
   const stateFile = stateFileFor(state.outputDir, state.hostname);
   const outputDir = `${state.outputDir}/${state.hostname}`;
 
@@ -109,7 +109,7 @@ export async function runWizardPipeline(
 
   if (resumeMode || !interactive) {
     // Resume or non-interactive: run all remaining stages in one shot
-    return runPhase(state, stateFile, outputDir, skipStages, cloneUrl, postId, qaAutoFix, mcpUrl, mcpAuth, extractor, upgradeToV4);
+    return runPhase(state, stateFile, outputDir, skipStages, cloneUrl, postId, qaAutoFix, heal, mcpUrl, mcpAuth, extractor, upgradeToV4);
   }
 
   // ─────────────── Interactive: two-phase step-by-step ───────────────
@@ -117,7 +117,7 @@ export async function runWizardPipeline(
   // Phase 1: Extract + Classify (stages 1-2)
   console.log(chalk.bold.magenta('╭── Phase 1 of 2: Extract + Classify ──╮\n'));
   const phase1Skip = new Set([...skipStages, 3, 4, 5, 6, 7]);
-  const phase1 = await runPhase(state, stateFile, outputDir, phase1Skip, cloneUrl, postId, qaAutoFix, mcpUrl, mcpAuth, extractor);
+  const phase1 = await runPhase(state, stateFile, outputDir, phase1Skip, cloneUrl, postId, qaAutoFix, heal, mcpUrl, mcpAuth, extractor);
   const phase1Result = phase1.pipelineResult;
 
   if (!phase1Result?.extraction) {
@@ -158,6 +158,7 @@ export async function runWizardPipeline(
     postId: postId ?? state.options.postId,
     qaAutoFix: qaAutoFix ?? state.options.qaAutoFix,
     upgradeToV4: upgradeToV4 ?? state.options.upgradeToV4,
+    heal: heal ?? state.options.heal,
   });
 
   // Update state from phase 2 stages
@@ -217,6 +218,7 @@ async function runPhase(
   cloneUrl?: string,
   postId?: number,
   qaAutoFix?: boolean,
+  heal?: boolean,
   mcpUrl?: string,
   mcpAuth?: string,
   extractor?: 'local' | 'browserbase',
@@ -234,6 +236,7 @@ async function runPhase(
       postId: postId ?? state.options.postId,
       qaAutoFix: qaAutoFix ?? state.options.qaAutoFix,
       upgradeToV4: upgradeToV4 ?? state.options.upgradeToV4,
+      heal: heal ?? state.options.heal,
       mcpUrl,
       mcpAuth,
       extractor,

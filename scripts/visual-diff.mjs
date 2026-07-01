@@ -146,6 +146,7 @@ async function healthCheck(page, url) {
  */
 async function capture(browser, url, outPath, vp, fullPage) {
   let lastError = null;
+  let lastReason = null;
 
   for (let attempt = 1; attempt <= RETRIES; attempt++) {
     const page = await browser.newPage();
@@ -161,6 +162,7 @@ async function capture(browser, url, outPath, vp, fullPage) {
 
       const httpStatus = resp?.status?.() ?? 0;
       if (httpStatus >= 400) {
+        lastReason = `HTTP ${httpStatus}`;
         log(`  [attempt ${attempt}] HTTP ${httpStatus} for ${url}`);
         await page.close();
         continue;
@@ -211,6 +213,7 @@ async function capture(browser, url, outPath, vp, fullPage) {
       // Step 5: health check
       const health = await healthCheck(page, url);
       if (!health.ok && attempt < RETRIES) {
+        lastReason = `health check failed (len=${health.bodyLen}, hasContent=${health.hasContent})`;
         log(`  [attempt ${attempt}] Health check failed (len=${health.bodyLen}, hasContent=${health.hasContent}) — retrying`);
         await page.close();
         await new Promise(r => setTimeout(r, 2000 * attempt));
@@ -224,6 +227,7 @@ async function capture(browser, url, outPath, vp, fullPage) {
       // Step 7: verify screenshot is not blank
       const fileSize = fs.statSync(outPath).size;
       if (fileSize < 8_000 && attempt < RETRIES) {
+        lastReason = `screenshot too small (${fileSize}B, likely blank)`;
         log(`  [attempt ${attempt}] Screenshot too small (${fileSize}B, likely blank) — retrying`);
         await page.close();
         await new Promise(r => setTimeout(r, 3000 * attempt));
@@ -242,7 +246,7 @@ async function capture(browser, url, outPath, vp, fullPage) {
     }
   }
 
-  log(`  FAILED after ${RETRIES} attempts. Last error: ${lastError?.message}`);
+  log(`  FAILED after ${RETRIES} attempts. Last error: ${lastError?.message ?? lastReason ?? 'unknown'}`);
   return { path: outPath, pageHeight: 0, ok: false };
 }
 

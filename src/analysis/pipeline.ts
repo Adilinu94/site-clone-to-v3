@@ -69,6 +69,9 @@ import {
   buildPixelElementResolver,
 } from '../qa/pixel-element-resolver.js';
 import {
+  runHealingLoop,
+} from '../qa/healing-loop.js';
+import {
   pushToWordPress,
   type WpPushResult,
 } from '../mcp/wp-push.js';
@@ -94,6 +97,8 @@ export interface PipelineOptions extends ExtractionOptions {
   qaMinScore?: number;
   /** Enable Auto-Fix-Loop after QA (requires postId + mcpUrl). Default: false. */
   qaAutoFix?: boolean;
+  /** Enable Vision-QA Healing-Loop after QA (requires postId + mcpUrl + cloneUrl). Default: false. */
+  heal?: boolean;
   /** Post-ID of the deployed Elementor page for Auto-Fix elementor-edit-element calls. */
   postId?: number;
   /**
@@ -604,6 +609,66 @@ export async function runPipeline(
     } else if (options.qaAutoFix) {
       stageSummary.autoFixNote =
         'auto-fix requested but skipped — requires postId + mcpUrl';
+    }
+
+    // Healing-Loop (Vision-QA-driven, alternative to Auto-Fix-Loop above): requires
+    // postId + mcpUrl + cloneUrl. Uses runVisionQa as primary quality signal
+    // (semantic, 0-100) instead of pixel-diff.
+    if (
+      options.heal &&
+      qaReport.verdict !== 'pass' &&
+      options.postId !== undefined &&
+      options.mcpUrl
+    ) {
+      const healMs = Date.now();
+      try {
+        const mcpAdapter = new McpAdapter({
+          baseUrl: options.mcpUrl,
+          authHeader: options.mcpAuth ? `Basic ${Buffer.from(options.mcpAuth).toString('base64')}` : '',
+        });
+        const mcpCallFn: McpCallFn = async (abilityName, parameters) => {
+          return mcpAdapter.executeAbility(abilityName, parameters);
+        };
+
+        const pageDataPath = path.join(outputDir, 'page-v3.json');
+        const resolver = await buildPixelElementResolver({
+          pageDataPath,
+          viewportWidth: 1440,
+          defaultSectionHeightPx: 600,
+        });
+
+        const fixers = createRealFixers({
+          mcp: mcpCallFn,
+          postId: options.postId!,
+          resolver,
+          dryRun: options.dryRun ?? false,
+          originalUrl: url,
+        });
+
+        const healOutputDir = path.join(outputDir, 'qa', 'healing');
+        const healReport = await runHealingLoop({
+          originalPath: path.join(outputDir, 'qa', 'original.png'),
+          clonePath: path.join(outputDir, 'qa', 'clone.png'),
+          cloneUrl: options.cloneUrl!,
+          outputDir: healOutputDir,
+          fixers,
+        });
+
+        artifacts['healing-report'] = path.join(healOutputDir, 'healing-loop-report.json');
+        outputPaths.push(path.join(healOutputDir, 'healing-loop-report.json'));
+        stageSummary.heal = {
+          totalIterations: healReport.totalIterations,
+          initialScore: healReport.initialScore,
+          finalScore: healReport.finalScore,
+          targetReached: healReport.targetReached,
+        };
+        stageSummary.healDurationMs = Date.now() - healMs;
+      } catch (err) {
+        stageSummary.healError = (err as Error).message ?? String(err);
+      }
+    } else if (options.heal) {
+      stageSummary.healNote =
+        'heal requested but skipped — requires postId + mcpUrl';
     }
 
     stages.push({

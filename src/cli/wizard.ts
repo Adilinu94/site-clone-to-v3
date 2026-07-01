@@ -52,6 +52,8 @@ export interface WizardOptions {
   qaAutoFix?: boolean;
   /** Upgrade the pushed page to Elementor V4 Atomic Widgets as the final pipeline step (requires postId + MCP target). */
   upgradeToV4?: boolean;
+  /** Enable Vision-QA healing loop after pixel-diff (requires cloneUrl + postId + MCP target). */
+  heal?: boolean;
   /** MCP endpoint URL for WP-Push and Auto-Fix (e.g. https://test4.nick-webdesign.de/wp-json/mcp/novamira). */
   mcpUrl?: string;
   /** Basic auth credentials for MCP endpoint (format: user:pass). */
@@ -73,6 +75,8 @@ export interface WizardResult {
   qaAutoFix?: boolean;
   /** Upgrade the pushed page to Elementor V4 Atomic Widgets as the final pipeline step. */
   upgradeToV4?: boolean;
+  /** Enable Vision-QA healing loop after pixel-diff. */
+  heal?: boolean;
   /** MCP endpoint URL for WP-Push and Auto-Fix. */
   mcpUrl?: string;
   /** Basic auth credentials for MCP endpoint. */
@@ -225,13 +229,14 @@ export async function runWizard(opts: WizardOptions): Promise<WizardResult> {
     }
   }
 
-  // Wire cloneUrl + postId + qaAutoFix + upgradeToV4 into state for QA/upgrade stages
+  // Wire cloneUrl + postId + qaAutoFix + upgradeToV4 + heal into state for QA/upgrade stages
   if (opts.cloneUrl) state.options.cloneUrl = opts.cloneUrl;
   if (opts.postId !== undefined) state.options.postId = opts.postId;
   if (opts.qaAutoFix) state.options.qaAutoFix = opts.qaAutoFix;
   if (opts.upgradeToV4) state.options.upgradeToV4 = opts.upgradeToV4;
+  if (opts.heal) state.options.heal = opts.heal;
 
-  return { state, resumeMode, dryRun: false, interactive: opts.interactive, cloneUrl: opts.cloneUrl, postId: opts.postId, qaAutoFix: opts.qaAutoFix, upgradeToV4: opts.upgradeToV4, mcpUrl: opts.mcpUrl, mcpAuth: opts.mcpAuth, extractor: opts.extractor };
+  return { state, resumeMode, dryRun: false, interactive: opts.interactive, cloneUrl: opts.cloneUrl, postId: opts.postId, qaAutoFix: opts.qaAutoFix, upgradeToV4: opts.upgradeToV4, heal: opts.heal, mcpUrl: opts.mcpUrl, mcpAuth: opts.mcpAuth, extractor: opts.extractor };
 }
 
 async function buildFreshState(opts: WizardOptions, url: string): Promise<CloneState> {
@@ -245,5 +250,6 @@ async function buildFreshState(opts: WizardOptions, url: string): Promise<CloneS
     postId: opts.postId,
     qaAutoFix: opts.qaAutoFix,
     upgradeToV4: opts.upgradeToV4,
+    heal: opts.heal,
   });
 }

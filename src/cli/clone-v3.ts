@@ -71,6 +71,7 @@ program
   .option('--post-id <id>', 'WordPress post ID of the deployed clone page — required for QA auto-fix MCP calls')
   .option('--qa-auto-fix', 'Enable auto-fix loop after QA diff (requires --clone-url + --post-id + MCP target)', false)
   .option('--upgrade-to-v4', 'Upgrade the pushed page to Elementor V4 Atomic Widgets as the final step (requires --post-id + MCP target, runs after QA/auto-fix)', false)
+  .option('--heal', 'Enable Vision-QA self-healing loop after QA diff (requires --clone-url + --post-id + MCP target)', false)
   .option('--mcp-url <url>', 'MCP endpoint URL for WP-Push and Auto-Fix (e.g. https://test4.nick-webdesign.de/wp-json/mcp/novamira)')
   .option('--mcp-auth <user:pass>', 'Basic auth credentials for MCP endpoint')
   .option('--extractor <mode>', 'Browser backend for extraction: local (default) | browserbase (cloud CDP)')
@@ -97,6 +98,7 @@ program
         postId: options.postId !== undefined ? parseInt(options.postId as string, 10) : undefined,
         qaAutoFix: !!options.qaAutoFix,
         upgradeToV4: !!options.upgradeToV4,
+        heal: !!options.heal,
         mcpUrl: options.mcpUrl,
         mcpAuth: options.mcpAuth,
         extractor: options.extractor as 'local' | 'browserbase' | undefined,
