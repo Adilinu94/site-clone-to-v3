@@ -58,3 +58,7 @@ Thumbs.db
 
 # OS
 *.log
+
+# Visual-diff reports (regenerierbare Screenshots, blaeht .git unnoetig auf —
+# analog zu screenshots/ und qa-screenshots/ oben)
+diff-reports/
